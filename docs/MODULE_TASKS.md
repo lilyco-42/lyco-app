@@ -92,13 +92,19 @@
 首次推送 0 秒失败：step 名字里写了 `offline: no model` 这个冒号，YAML 直接解析失败，
 GitHub 连 job 都没建（`gh run view --log` 只会说 log not found）。现在本地先
 `python -c "import yaml; yaml.safe_load(...)"` 验一遍再推。
-修好后两次全绿：run 36729302532（python / mobile / android，APK 产物 `lycoapp-debug`
-39,614,181 字节）、run 36730689189（加上 plugin job，Linux + `LYCO_PY=python3` + node 24，
-13 项插件测试同样通过）。
-第三次全绿是 run 36732136945（HEAD `d3ae4f1`，四个 job 全 `completed/success`，
-APK 39,614,174 字节）。**APK 字节数不是 pin**：只改 markdown 的一次提交里它就少了 7 字节
-（zip 里的时间戳/顺序不进内容哈希），所以这个数只证明"产物真的建出来并上传了"，
-不要拿它当回归基线。
+修好的五次全绿（HEAD 与产物都从 API 反查，每个 run 都从 job log 里取实际输出行，不看绿勾）：
+
+| run | HEAD | job 数 | log 里的证据 |
+|-----|------|--------|-------------|
+| 36729302532 | `c28deae` | 3（还没有 plugin） | python + mobile + android 全 success，APK 39,614,181 字节 |
+| 36730689189 | `c5b6805` | 4 | 加上 plugin job（Linux + `LYCO_PY=python3` + node 24），13 项插件测试通过，APK 39,614,176 字节 |
+| 36732136945 | `d3ae4f1` | 4 | `13 groups PASSED`、poi/reviews `ALL PASSED`、jest 3、sensors `# pass 6`，APK 39,614,174 字节 |
+| 36732927196 | `1cbe70d` | 4 | 四 job 全 success，APK 39,614,173 字节 |
+| 36733562274 | `4cb84e7` | 4 | `13 groups PASSED`、poi/reviews `ALL PASSED`、**jest `Tests: 5 passed`**（safe-area 自动 mock 在 Linux 上同样生效）、sensors `# pass 6 / # fail 0`、插件 `ℹ tests 13 / pass 13 / fail 0`、APK 39,614,178 字节（Artifact ID 11106012318） |
+
+**APK 字节数不是 pin**：五次构建落在 39,614,173 ~ 39,614,181 这 9 字节区间里，
+而中间几次只改了 markdown 或测试（zip 里的时间戳/顺序不进内容哈希）。这个数只证明
+"产物真的建出来并上传了"，不要拿它当回归基线。
 
 CI 从没证明的事：APK 只构建、没安装。整个仓库目前没有任何一层跑过真机或模拟器。
 
