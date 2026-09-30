@@ -109,6 +109,11 @@
    把两行顺序还原回去，本机断言变成 `[]` 立即红；修正后 17 组绿。
    这条同时是对"只在 CI 上验证"的一次警告 —— 铁律 1 让构建走 CI，
    但平台差异只有本机这一份能暴露。
+   **同一个 bug 在 `lyco-model/rag_loop.py` 里也存在，已一并修掉（`ecf31a6`）**，
+   那边影响更实际：它每次都往本机的 `llama-server 127.0.0.1:8079` 发请求，
+   在 Windows 上这些请求其实会走系统代理。修法相同（先 pop 再 set），
+   本机验后 `test_retry` 7/7、`test_claims` 12/12 仍全过，
+   且 `http()` 之后环境变量确实剩 `['127.0.0.1,localhost']`（修前是 `[]`）。
 
 ## 今日从 lyco-model 同步进 core 的（依据见 lyco-model/DEMO_100rounds.md §10-12）
 
@@ -152,10 +157,11 @@ stale pin；核对方法：`gh run list --branch main` 取 id，`gh run view <id
 | 36732136945 | `d3ae4f1` | 4 | `13 groups PASSED`、poi/reviews `ALL PASSED`、jest 3、sensors `# pass 6`，APK 39,614,174 字节 |
 | 36732927196 | `1cbe70d` | 4 | 四 job 全 success，APK 39,614,173 字节 |
 | 36733562274 | `4cb84e7` | 4 | `13 groups PASSED`、poi/reviews `ALL PASSED`、**jest `Tests: 5 passed`**（safe-area 自动 mock 在 Linux 上同样生效）、sensors `# pass 6 / # fail 0`、插件 `ℹ tests 13 / pass 13 / fail 0`、APK 39,614,178 字节（Artifact ID 11106012318） |
-| 36734675159 | `c6203a6` | 4 | 四 job 全 success（这版 markdown 之后 `13 groups` 已随测试补充变成 15，本行只记当时状态），APK 39,614,176 字节 |
+| 36734675159 | `c6203a6` | 4 | 四 job 全 success（`N groups PASSED` 这个数会随补充的组一直变，各行只记当时值），APK 39,614,176 字节 |
 | 36735218413 | `c0b955b` | 4 | 四 job 全 success，rss 检索组已进入 CI 跑的离线套件，APK 39,614,177 字节 |
 | 36735766801 | `690dbcb` | 4 | `15 groups PASSED`（summarizer 组上 CI）、jest `Tests: 5 passed`、sensors `# pass 6`、插件 `ℹ tests 13`，APK 39,614,181 字节（ID 11107198666） |
 | 36736149701 | `aad8a54` | 4 | `15 groups PASSED`、jest 5、sensors 6、插件 13、APK 39,614,174 字节（ID 11107540923） |
+| 36737214110 | `dd1be42` | 4 | `16 groups PASSED`（local kb 组上 CI）、jest 5、sensors `# pass 6`、插件 `ℹ tests 13`、APK 39,614,180 字节（ID 11107269215） |
 
 **APK 字节数不是 pin**：表里这几行落在 39,614,173 ~ 39,614,181 这 9 字节区间里，
 而中间几次只改了 markdown 或测试（zip 里的时间戳/顺序不进内容哈希）。这个数只证明
