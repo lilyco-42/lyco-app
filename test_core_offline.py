@@ -232,6 +232,106 @@ def test_cli_json_contract():
         loop.answer = orig
 
 
+# -- rss retriever ----------------------------------------------------------
+#
+# Fixture is built so the ranking assertion is sensitive to the title weight:
+# item A and item B match the same 6 tokens but split them differently between
+# title and description, so only `score_text(title) * 3` puts B first. Drop the
+# weight and the two tie at 6, leaving A first -- the test then fails.
+
+FEED = (
+    "<rss><channel>"
+    "<item><title>tokio 入门教程</title><link>https://rustcc.cn/i1</link>"
+    "<description>&lt;p&gt;异步运行时 更新&lt;/p&gt;</description></item>"
+    "<item><title>本周社区动态</title><link>https://rustcc.cn/i2</link>"
+    "<description>闲聊灌水周报</description></item>"
+    "<item><title>异步运行时 性能对比</title><link>https://rustcc.cn/i3</link>"
+    "<description>tokio 讨论</description></item>"
+    "</channel></rss>"
+)
+
+OTHER_FEED = (
+    "<rss><channel><item><title>Tokio 2.0 发布</title>"
+    "<link>https://rustcc.cn/new</link>"
+    "<description>异步运行时 tokio 大版本</description></item>"
+    "</channel></rss>"
+)
+
+
+class _Resp:
+    def __init__(self, text):
+        self.text = text
+
+    def raise_for_status(self):
+        pass
+
+
+class _FeedClient:
+    """Stand-in for httpx.Client: counts fetches so the cache branches are visible."""
+
+    def __init__(self, text):
+        self.text = text
+        self.calls = 0
+
+    def get(self, url, headers=None):
+        self.calls += 1
+        return _Resp(self.text)
+
+
+class _NoNetwork:
+    def get(self, url, headers=None):
+        raise AssertionError("fresh cache must be read instead of the network")
+
+
+def test_rss_retriever():
+    import shutil
+    import tempfile
+    import time as _time
+    from core.retrievers import rss as rss_mod
+
+    tmp = tempfile.mkdtemp()
+    cache = os.path.join(tmp, "rustcc_rss.xml")
+    saved = rss_mod.RSS_CACHE
+    try:
+        rss_mod.RSS_CACHE = cache
+
+        c = _FeedClient(FEED)
+        ev, notes = rss_mod.rss_search(c, "tokio 异步运行时")
+        assert c.calls == 1 and os.path.exists(cache), "first call must fetch and cache"
+        assert notes == [], notes
+        assert len(ev) == 2, f"topn=2, and 本周社区动态 must be filtered out: {ev}"
+        assert "性能对比" in ev[0], f"title must outweigh description: {ev}"
+        assert "入门教程" in ev[1], ev
+        assert all("【RustCC:" in e and "来源:https://rustcc.cn/" in e for e in ev), ev
+        assert "<p>" not in ev[1] and "&lt;" not in ev[1], f"html must be stripped: {ev[1]}"
+
+        ev1, _ = rss_mod.rss_search(_NoNetwork(), "tokio 异步运行时", topn=1)
+        assert len(ev1) == 1 and "性能对比" in ev1[0], ev1
+
+        stale = _time.time() - rss_mod.RSS_TTL - 10
+        os.utime(cache, (stale, stale))
+        c2 = _FeedClient(OTHER_FEED)
+        ev2, _ = rss_mod.rss_search(c2, "tokio 异步运行时")
+        assert c2.calls == 1, "expired cache must refetch"
+        assert len(ev2) == 1 and "Tokio 2.0" in ev2[0], ev2
+
+        rss_mod.RSS_CACHE = os.path.join(tmp, "missing", "none.xml")
+
+        class _Dead:
+            def get(self, url, headers=None):
+                raise RuntimeError("connection refused")
+
+        ev3, notes3 = rss_mod.rss_search(_Dead(), "tokio")
+        assert ev3 == [], ev3
+        assert len(notes3) == 1 and notes3[0].startswith("rss-err:"), notes3
+        assert "connection refused" in notes3[0], notes3
+
+        ok("rss: cache write/read/TTL, title weighting, html strip, anchor filter, error note")
+    finally:
+        rss_mod.RSS_CACHE = saved
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 if __name__ == "__main__":
     test_cue_routing()
     test_no_wikipedia_source()
@@ -241,6 +341,7 @@ if __name__ == "__main__":
     test_decline_family_and_direct_gate()
     test_hits_are_deterministic()
     test_rate_limit_backoff()
+    test_rss_retriever()
     test_loop_uses_new_gate()
     test_cli_json_contract()
     print(f"\n{len(PASSED)} groups PASSED")

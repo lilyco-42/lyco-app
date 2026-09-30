@@ -26,14 +26,14 @@
 | 模块 | 表里的声明 | 命令 | 实测结果 |
 |------|-----------|------|----------|
 | core/router / retrievers / summarizer / verify | ✅ test_core 通过 | `python test_core.py` | 2 题 ALL PASSED；Q1 verify `overlap=2, on_topic=True`，Q2 `direct` |
-| core（新增，无模型无网络） | 本次补 | `python test_core_offline.py` | 13 组 PASS（末组为 `python -m core.cli` 的输出契约：恒一个 JSON、坏输入 exit 2） |
+| core（新增，无模型无网络） | 本次补 | `python test_core_offline.py` | 14 组 PASS（含 `python -m core.cli` 的输出契约，以及本次补上的 rss 检索组，见记录 4） |
 | services/poi | ✅ 7/7 | `python services/poi/test_poi.py` | 7 条 PASS，ALL PASSED |
 | services/reviews | ✅ 5/5 | `python services/reviews/test_reviews.py` | 5 条 PASS，ALL PASSED |
 | mobile/sensors | ✅ node:test 6/6 | `node --test mobile/sensors/test_permissions.mjs` | 6 pass / 0 fail |
 | mobile/ui | ✅ tsc + jest | `npx tsc --noEmit`；`npx jest --ci` | tsc 退出码 0 无输出；jest 2 suites / 5 tests（复核时把模板那条空断言换成了真的双屏切换断言，见记录 3） |
 | plugins/dsh-lyco-chat | 本次新增 | `node --test test_plugin.mjs` | 13 pass / 0 fail（含走真 python + stub CLI 的端到端两条） |
 
-没有假声明，但三条必须说清：
+没有假声明，但四条必须说清：
 
 1. `test_core.py` 依赖 `llama-cli` 和 `D:/gal/AliceInCradle/kb` 的本地文件，换机器必红。
    因此新增 `test_core_offline.py`（检索 stub、`summarize_fn` 注入），CI 跑这份；
@@ -59,6 +59,22 @@
 
    仍未证明的：真机/模拟器上没人看过一眼。CI 的 android job 只证明 APK 建得出来，
    装过没有 = 没有。所以"双屏可用"现在是组件树级别的正确，不是视觉级别的正确。
+
+4. **`core/retrievers` 那条 ✅ 原来漏了一半。** 三个检索出口里 deepwiki 有离线组，
+   local 靠 `test_core.py` 的 `assert kb_hits`，而 **`rss.py` 在补测试之前整个仓库里
+   一处都没有**（`grep -rn "rss" test_core.py test_core_offline.py` 当时为空）。
+   表里的声明因此是过度声称。
+   本次补了第 14 组 `rss: cache write/read/TTL, title weighting, html strip, anchor
+   filter, error note`：假 client 注入 XML，验首取写盘、新鲜缓存不再走网、
+   `RSS_TTL` 过期后重取、`score>=2 且必须命中锚点`（周报项被筛掉）、
+   description 里的 `<p>` 被剥、`【RustCC:标题】… 来源:链接` 格式、
+   以及失败路径返回 `([], ["rss-err: ..."])` 而不是抛异常。
+   两条变异测试证明确实承重：删掉 `re.sub` 剥标签 → 红；把 `score_text(title) * 3`
+   的权重去掉 → 排序断言红（fixture 特意让两条 item 的原始命中数相等，
+   只有标题加权才分出先后）。
+   仍未覆盖的：`rss_search` 从没真访问过 `https://rustcc.cn/rss`（CI 也不联网），
+   所以真 feed 的命名空间/编码意外情况只有线上才知道；`local.py` 的测试仍只在
+   本机那份需要 kb 目录的 smoke 里。
 
 ## 今日从 lyco-model 同步进 core 的（依据见 lyco-model/DEMO_100rounds.md §10-12）
 
