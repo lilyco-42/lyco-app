@@ -26,14 +26,14 @@
 | 模块 | 表里的声明 | 命令 | 实测结果 |
 |------|-----------|------|----------|
 | core/router / retrievers / summarizer / verify | ✅ test_core 通过 | `python test_core.py` | 2 题 ALL PASSED；Q1 verify `overlap=2, on_topic=True`，Q2 `direct` |
-| core（新增，无模型无网络） | 本次补 | `python test_core_offline.py` | 14 组 PASS（含 `python -m core.cli` 的输出契约，以及本次补上的 rss 检索组，见记录 4） |
+| core（新增，无模型无网络） | 本次补 | `python test_core_offline.py` | 15 组 PASS（`python -m core.cli` 输出契约、rss 检索组、summarizer 组均为本次补，见记录 4、5） |
 | services/poi | ✅ 7/7 | `python services/poi/test_poi.py` | 7 条 PASS，ALL PASSED |
 | services/reviews | ✅ 5/5 | `python services/reviews/test_reviews.py` | 5 条 PASS，ALL PASSED |
 | mobile/sensors | ✅ node:test 6/6 | `node --test mobile/sensors/test_permissions.mjs` | 6 pass / 0 fail |
 | mobile/ui | ✅ tsc + jest | `npx tsc --noEmit`；`npx jest --ci` | tsc 退出码 0 无输出；jest 2 suites / 5 tests（复核时把模板那条空断言换成了真的双屏切换断言，见记录 3） |
 | plugins/dsh-lyco-chat | 本次新增 | `node --test test_plugin.mjs` | 13 pass / 0 fail（含走真 python + stub CLI 的端到端两条） |
 
-没有假声明，但四条必须说清：
+没有假声明，但五条必须说清：
 
 1. `test_core.py` 依赖 `llama-cli` 和 `D:/gal/AliceInCradle/kb` 的本地文件，换机器必红。
    因此新增 `test_core_offline.py`（检索 stub、`summarize_fn` 注入），CI 跑这份；
@@ -75,6 +75,21 @@
    仍未覆盖的：`rss_search` 从没真访问过 `https://rustcc.cn/rss`（CI 也不联网），
    所以真 feed 的命名空间/编码意外情况只有线上才知道；`local.py` 的测试仍只在
    本机那份需要 kb 目录的 smoke 里。
+5. **`core/summarizer` 同样是 CI 完全没碰过的模块。** 离线套件过去用注入的
+   `fake_summarize_fn` 把它整个绕过，`test_core.py` 那条又只在装了 `llama-cli`
+   的本机跑。本次补第 15 组（假 `subprocess.run`）锁住它的实际行为：argv 里
+   `-m <model>`、`-n 256`、`--single-turn`、`--no-display-prompt`、`timeout=180`；
+   三种 prompt 分支（有证据 / 搜过但空 / 纯 direct 原样透传）；回显解析
+   （`> prompt` 标记、`(truncated)` 尾切、`[Prompt:` 与 `Exiting...` 截尾）；
+   `Generation: 24.9 t/s` → `gen_ts`；gbk 回显能解码；非零 `rc` 如实透传；
+   `LYCO_LLAMA_CLI` / `LYCO_CHAT_MODEL` 覆盖生效。
+   两次变异各红一次：`-n 256`→`128` 断言红；关掉 `(truncated)` 分支后
+   `response` 里混进 banner 与 `...(truncated)` 也红。
+
+   **但这组锁的是现状不是理想形态。** 期望值是我按现有解析写的，真实
+   `llama-cli` 的回显格式只有本机 `test_core.py` 证明过；而 lyco-model §10 的
+   结论恰恰是"回显解析整段应当删掉，改用 `llama-server` 的 messages"。迁到
+   server 时要连这组解析断言一起删，别把它当成要长期守的契约。
 
 ## 今日从 lyco-model 同步进 core 的（依据见 lyco-model/DEMO_100rounds.md §10-12）
 

@@ -332,6 +332,86 @@ def test_rss_retriever():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+# -- summarizer: argv, prompt branches and echo parsing ----------------------
+
+class _Proc:
+    def __init__(self, stdout=b"", stderr=b"", returncode=0):
+        self.stdout = stdout
+        self.stderr = stderr
+        self.returncode = returncode
+
+
+def test_summarizer_offline():
+    import importlib
+    from core import summarizer as sm
+
+    saved_run, saved_cli, saved_model = sm.subprocess.run, sm.LLAMA_CLI, sm.CHAT_MODEL
+    seen = {}
+    fake = {"stdout": b"", "stderr": b"", "rc": 0}
+
+    def fake_run(argv, **kw):
+        seen["argv"] = argv
+        seen["kw"] = kw
+        return _Proc(stdout=fake["stdout"], stderr=fake["stderr"],
+                     returncode=fake["rc"])
+
+    try:
+        sm.subprocess.run = fake_run
+        sm.LLAMA_CLI, sm.CHAT_MODEL = "/bin/llama-cli", "/models/q4.gguf"
+
+        sm.summarize("Q4_K_M 是什么？", ["资料甲", "资料乙"], True)
+        argv = seen["argv"]
+        assert argv[0] == "/bin/llama-cli" and argv[2] == "/models/q4.gguf", argv
+        assert argv[argv.index("-n") + 1] == "256", argv
+        assert "--single-turn" in argv and "--no-display-prompt" in argv, argv
+        assert seen["kw"]["capture_output"] is True and seen["kw"]["timeout"] == 180
+        prompt = argv[argv.index("-p") + 1]
+        assert "【检索到的资料】\n资料甲\n资料乙" in prompt, prompt
+        assert "只根据上述资料回答" in prompt and "就说不知道" in prompt, prompt
+
+        sm.summarize("量化是什么？", [], True)
+        pr2 = seen["argv"][seen["argv"].index("-p") + 1]
+        assert "没有检索到相关资料" in pr2 and "【检索到的资料】" not in pr2, pr2
+
+        sm.summarize("讲个笑话", [], False)
+        pr3 = seen["argv"][seen["argv"].index("-p") + 1]
+        assert pr3 == "讲个笑话", pr3
+
+        pr = "PROMPT-TEXT"
+        fake["stdout"] = ("some banner\n> " + pr + "\n真正的回答内容\n"
+                          "[Prompt: blah blah\nExiting...\n").encode("utf-8")
+        res = sm.summarize(pr, [], False)
+        assert res["response"] == "真正的回答内容", res
+        assert res["rc"] == 0 and res["gen_ts"] is None, res
+
+        fake["stdout"] = ("Generation: 24.9 t/s\n" + pr + "...(truncated)\n"
+                          "截断后的回答\nExiting...").encode("utf-8")
+        res2 = sm.summarize(pr, [], False)
+        assert res2["response"] == "截断后的回答", res2
+        assert res2["gen_ts"] == 24.9, res2
+
+        fake["stdout"] = "中文 gbk 回显".encode("gbk")
+        fake["rc"] = 3
+        res3 = sm.summarize("x", [], False)
+        assert "中文 gbk 回显" in res3["response"], res3
+        assert res3["rc"] == 3, res3
+
+        assert sm.dec(b"") == "" and sm.dec(None) == ""
+
+        os.environ["LYCO_LLAMA_CLI"] = "/opt/other-cli"
+        os.environ["LYCO_CHAT_MODEL"] = "/opt/other.gguf"
+        importlib.reload(sm)
+        assert sm.LLAMA_CLI == "/opt/other-cli" and sm.CHAT_MODEL == "/opt/other.gguf"
+        ok("summarizer: argv flags, three prompt branches, echo/truncation parse, "
+           "gbk decode, env override")
+    finally:
+        sm.subprocess.run = saved_run
+        for k in ("LYCO_LLAMA_CLI", "LYCO_CHAT_MODEL"):
+            os.environ.pop(k, None)
+        importlib.reload(sm)
+        assert sm.LLAMA_CLI == saved_cli and sm.CHAT_MODEL == saved_model
+
+
 if __name__ == "__main__":
     test_cue_routing()
     test_no_wikipedia_source()
@@ -342,6 +422,7 @@ if __name__ == "__main__":
     test_hits_are_deterministic()
     test_rate_limit_backoff()
     test_rss_retriever()
+    test_summarizer_offline()
     test_loop_uses_new_gate()
     test_cli_json_contract()
     print(f"\n{len(PASSED)} groups PASSED")
