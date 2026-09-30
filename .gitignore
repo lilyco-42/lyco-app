@@ -5,3 +5,6 @@ __pycache__/
 models/
 node_modules/
 plugins/dsh-lyco-chat/cordis.yml
+
+# Storybook 预览产物（A 段设计态预览，构建于 CI）
+mobile/app/storybook-static/

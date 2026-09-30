@@ -75,6 +75,41 @@ jobs:
         working-directory: plugins/dsh-lyco-chat
         run: node --test test_plugin.mjs
 
+  preview:
+    name: "storybook preview (react-native-web)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: mobile/app/package-lock.json
+      - name: npm ci
+        working-directory: mobile/app
+        run: npm ci
+      - name: storybook build
+        working-directory: mobile/app
+        run: npm run storybook:build
+      - name: the preview must actually contain the screens
+        working-directory: mobile/app
+        run: |
+          node -e "
+          const j = require('./storybook-static/index.json');
+          const ids = Object.keys(j.entries).filter(k => j.entries[k].type === 'story');
+          console.log('stories:', ids.join(' '));
+          if (ids.length < 3) throw new Error('expected >=3 stories, got ' + ids.length);
+          for (const need of ['app-root--chat-tab','screens--chat','screens--nearby']) {
+            if (!ids.includes(need)) throw new Error('missing story ' + need);
+          }"
+      - name: upload preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: storybook-preview
+          path: mobile/app/storybook-static
+          if-no-files-found: error
+
   android:
     name: debug APK (gradle)
     runs-on: ubuntu-latest
