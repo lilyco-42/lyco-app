@@ -140,3 +140,74 @@ jobs:
           name: lycoapp-debug
           path: mobile/app/android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+
+  device:
+    name: "emulator screenshots (pixel truth)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: [android]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: mobile/app/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: npm ci
+        working-directory: mobile/app
+        run: npm ci
+      - name: install maestro
+        run: |
+          curl -fsSL https://get.maestro.mobile.dev -o /tmp/maestro-install.sh
+          bash /tmp/maestro-install.sh -p "$HOME/.maestro"
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+      - uses: actions/download-artifact@v4
+        with:
+          name: lycoapp-debug
+          path: apk
+      - name: start metro
+        working-directory: mobile/app
+        run: |
+          nohup npx react-native start > /tmp/metro.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf http://127.0.0.1:8081/status >/dev/null && break
+            sleep 2
+          done
+          curl -sf http://127.0.0.1:8081/status || { tail -40 /tmp/metro.log; exit 1; }
+      - name: drive the real app on an emulator
+        uses: ReactiveCircus/android-emulator-runner@v2
+        with:
+          api-level: 33
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: |
+            set -e
+            adb install -r "$GITHUB_WORKSPACE/apk/app-debug.apk"
+            adb reverse tcp:8081 tcp:8081
+            adb shell am start -n com.lycoapp/.MainActivity
+            sleep 60
+            adb exec-out screencap -p > /tmp/01-chat.png
+            maestro test "$GITHUB_WORKSPACE/.maestro/preview.yaml"
+            sleep 5
+            adb exec-out screencap -p > /tmp/02-nearby.png
+      - name: the shots must be real and must differ
+        run: |
+          ls -la /tmp/01-chat.png /tmp/02-nearby.png
+          test $(stat -c %s /tmp/01-chat.png) -gt 20000
+          test $(stat -c %s /tmp/02-nearby.png) -gt 20000
+          if cmp -s /tmp/01-chat.png /tmp/02-nearby.png; then
+            echo "identical screenshots: the tap on 身边 did nothing"
+            exit 1
+          fi
+          echo "screenshots differ, sizes: $(stat -c %s /tmp/01-chat.png) / $(stat -c %s /tmp/02-nearby.png)"
+      - name: upload screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: emulator-screenshots
+          path: /tmp/0*.png
+          if-no-files-found: error

@@ -1,0 +1,11 @@
+appId: com.lycoapp
+---
+# Pixel-truth lane: drive the real debug build on an emulator and leave the
+# screenshots to adb. Metro must be reachable on 8081 (adb reverse) because the
+# debug APK carries no JS bundle.
+- launchApp:
+    appId: com.lycoapp
+    clearState: true
+- assertVisible: "问 Lyco 点什么"
+- tapOn: "身边"
+- assertVisible: "地图占位"
