@@ -79,17 +79,23 @@ def main():
     with open(contents_path, encoding="utf-8") as f:
         contents = json.load(f)
     for entry in contents.get("images", []):
-        fn = entry.get("filename")
         size = entry.get("size", "0x0").split("x")
         scale = int(entry.get("scale", "1x").rstrip("x"))
         try:
             px = int(float(size[0]) * scale)
         except ValueError:
             continue
-        if not fn or px <= 0:
+        if px <= 0:
             continue
+        fn = entry.get("filename")
+        if not fn:
+            fn = (f"Icon-{size[0]}x{size[0]}@{entry.get('scale', '1x')}.png")
+            entry["filename"] = fn
         base.resize((px, px), Image.LANCZOS).save(os.path.join(aset, fn))
         print(f"ios {fn}: {px}px ok")
+    with open(contents_path, "w", encoding="utf-8") as f:
+        json.dump(contents, f, indent=2)
+        f.write("\n")
     # --- store listings ---
     assets = os.path.join(ROOT, "assets")
     base.resize((512, 512), Image.LANCZOS).save(
