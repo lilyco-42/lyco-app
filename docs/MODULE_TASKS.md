@@ -169,6 +169,28 @@ stale pin；核对方法：`gh run list --branch main` 取 id，`gh run view <id
 
 CI 从没证明的事：APK 只构建、没安装。整个仓库目前没有任何一层跑过真机或模拟器。
 
+### `device` job（模拟器像素真相）三次尝试都红了，原因已定位
+
+| 尝试 | run | 触发 | runner / 参数 | 结果 | 日志里的原话 |
+|------|-----|------|--------------|------|-------------|
+| 1 | 36752926806 | push | ubuntu-latest, API 33 x86_64 | 红（模拟器步骤超时） | `You're running a Linux VM where hardware acceleration is not available` → x86_64 AVD 软件模拟，600s 启动窗口内起不来 |
+| 2 | 36757097391 | dispatch | macos-14, `arch: aarch64` | 红（0.6 秒，参数校验） | `Value for input.arch 'aarch64' is unknown. Supported options: x86,x86_64,arm64-v8a` |
+| 3 | 36758175867 | dispatch | macos-14, `arm64-v8a` / API 30 | 红（约 20 分钟后） | `adb: device 'emulator-5554' not found` 刷屏 → `Timeout waiting for emulator to boot`，模拟器进程始终没注册到 adb |
+
+已排除的：前面每一步都绿（npm ci / 装 Maestro / 下载 APK / 起 Metro / 传产物），
+所以不是脚本或 JS 层的问题；本机 `react-native bundle --platform android` 也能出
+900,847 字节的 bundle，Metro 喂包没问题。
+
+**官方文档给出的正解是 larger Linux runner + 开 KVM**（action README 原话：Ubuntu larger
+runner 比 macOS 快 2–3 倍且便宜得多，并附 `Enable KVM group perms` 片段），
+但 GitHub 的 larger runner **要求账号挂上有效支付方式**，这一步不该由我替你决定。
+macOS 那条还能再试（下一步该改的是 `emulator-options` 里的 `-gpu swiftshader_indirect`
+→ Apple Silicon 上换 `-gpu metal`），但每次约 20 分钟、按 macOS 倍率计费，
+所以我把它当成一个待你拍板的选项，而不是继续猜。
+
+当前事实仍然是：**没有任何一层看过真机/模拟器像素**。设计态像素级布局由
+`storybook-preview` 负责（每次 push 都出，已在 CI 绿）。
+
 ## 界面预览（A 段：react-native-web，采用现成方案）
 
 之前唯一能"看"的手段是我手搓的 HTML：把 `react-test-renderer` 的组件树翻成 CSS。
