@@ -11,7 +11,7 @@ Lyco AI 随身助手：手机端 + 桌面端，端侧 GGUF 推理，用系统权
 
 ```
 mobile native (React Native, 首期) ── PocketPal 模式：端侧 GGUF + 系统权限
-desktop (DSH 插件, 二期) ── anywhere-labs/dsh-desktop（★29k，MIT），万物皆插件
+desktop (官方 DSH desktop, 二期) ── deepseek-ai/deepseek-harness 自带 apps/desktop（★240k，MIT，第一方插件 API），lyco_chat 以官方插件形态接入；不再用第三方 dsh-desktop
 bridge (参考) ── dsh-pocket 手机扫码同步（GPL-2.0，只借鉴不引入）
 core (Python/Rust) ── rag_loop.py：router → 检索 → chat 总结 → verify
 ```
@@ -59,4 +59,4 @@ core (Python/Rust) ── rag_loop.py：router → 检索 → chat 总结 → ve
 2. 定位权限 + 高德周边搜索（1km 洗发店列表）
 3. 口碑聚合（site: 搜索 → chat 总结 → 哪家好）
 4. 相机/麦克风/通知权限接入
-5. 桌面端做成 DSH 插件（替代 Tauri；dsh-pocket 只借鉴，GPL-2.0 不引入）
+5. 桌面端以官方 DSH 插件形态接入（deepseek-ai/deepseek-harness/apps/desktop；dsh-pocket 只借鉴，GPL-2.0 不引入）
