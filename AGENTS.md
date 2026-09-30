@@ -32,7 +32,7 @@ cd mobile/app && npm run storybook:build   # 设计态预览（react-native-web�
 
 Android/APK 只在 CI 构建：`.github/workflows/ci.yml`
 （python → mobile → plugin → preview → android，外加按需的 device）。
-`device` job 在 **macOS arm64 runner** 上用 API 33 aarch64 模拟器真装真点，产出
+`device` job 在 **macOS arm64 runner**（macos-14）上用 API 30 / `arm64-v8a` 模拟器真装真点，产出
 `emulator-screenshots` 产物；Linux runner 拿不到 `/dev/kvm`，x86_64 AVD 软件模拟
 启动不进来，所以这条只能在 macOS 上跑。macOS 分钟按倍率计费，因此它
 **只在 `workflow_dispatch` 时跑**：`gh workflow run ci.yml`（dispatch 默认就在 main 上）。

@@ -187,8 +187,13 @@ jobs:
       - name: drive the real app on an emulator
         uses: ReactiveCircus/android-emulator-runner@v2
         with:
-          api-level: 33
-          arch: aarch64
+          # arm64-v8a system images exist only for a few API levels (the action's
+          # README names 30), and the app's minSdk is 24, so 30 is the safe pick.
+          api-level: 30
+          # The action's own vocabulary, not the SDK image folder name: it
+          # rejects aarch64 with "Value for input.arch 'aarch64' is unknown.
+          # Supported options: x86,x86_64,arm64-v8a".
+          arch: arm64-v8a
           target: google_apis
           disable-animations: true
           script: |
