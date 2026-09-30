@@ -26,7 +26,7 @@
 | 模块 | 表里的声明 | 命令 | 实测结果 |
 |------|-----------|------|----------|
 | core/router / retrievers / summarizer / verify | ✅ test_core 通过 | `python test_core.py` | 2 题 ALL PASSED；Q1 verify `overlap=2, on_topic=True`，Q2 `direct` |
-| core（新增，无模型无网络） | 本次补 | `python test_core_offline.py` | 15 组 PASS（`python -m core.cli` 输出契约、rss 检索组、summarizer 组均为本次补，见记录 4、5） |
+| core（新增，无模型无网络） | 本次补 | `python test_core_offline.py` | 16 组 PASS（`python -m core.cli` 输出契约、rss 检索组、local kb 组、summarizer 组均为本次补，见记录 4、5） |
 | services/poi | ✅ 7/7 | `python services/poi/test_poi.py` | 7 条 PASS，ALL PASSED |
 | services/reviews | ✅ 5/5 | `python services/reviews/test_reviews.py` | 5 条 PASS，ALL PASSED |
 | mobile/sensors | ✅ node:test 6/6 | `node --test mobile/sensors/test_permissions.mjs` | 6 pass / 0 fail |
@@ -64,7 +64,7 @@
    local 靠 `test_core.py` 的 `assert kb_hits`，而 **`rss.py` 在补测试之前整个仓库里
    一处都没有**（`grep -rn "rss" test_core.py test_core_offline.py` 当时为空）。
    表里的声明因此是过度声称。
-   本次补了第 14 组 `rss: cache write/read/TTL, title weighting, html strip, anchor
+   本次补了 rss 组：`rss: cache write/read/TTL, title weighting, html strip, anchor
    filter, error note`：假 client 注入 XML，验首取写盘、新鲜缓存不再走网、
    `RSS_TTL` 过期后重取、`score>=2 且必须命中锚点`（周报项被筛掉）、
    description 里的 `<p>` 被剥、`【RustCC:标题】… 来源:链接` 格式、
@@ -73,11 +73,18 @@
    的权重去掉 → 排序断言红（fixture 特意让两条 item 的原始命中数相等，
    只有标题加权才分出先后）。
    仍未覆盖的：`rss_search` 从没真访问过 `https://rustcc.cn/rss`（CI 也不联网），
-   所以真 feed 的命名空间/编码意外情况只有线上才知道；`local.py` 的测试仍只在
-   本机那份需要 kb 目录的 smoke 里。
+   所以真 feed 的命名空间/编码意外情况只有线上才知道。
+   同一条口径接着把 `local.py` 也补成了离线组（local kb 组，临时 kb 目录）：扩展名只收
+   md/markdown/txt/toml（一份同样命中的 `.py` 必须被排除）、`.git`/`node_modules`/
+   `target` 被剪、`score>=2` 且必须有锚点、标签是相对路径 `【本地库:子目录+文件】`、
+   命中片段 ≤500 字、`topn` 生效、kb 目录不存在时返回 `[]` 而不是抛异常。
+   两次变异各红一次：把剪枝条件改成恒真 → `.git/hidden.md` 混进结果；
+   扩展名白名单里加 `.py` → `c/tool.py` 混进结果。
+   `local.py` 因此在 CI 里也有覆盖了，剩下的只是它在**真 kb 目录**上的表现
+   仍只有本机 `test_core.py` 那份 smoke 证明过。
 5. **`core/summarizer` 同样是 CI 完全没碰过的模块。** 离线套件过去用注入的
    `fake_summarize_fn` 把它整个绕过，`test_core.py` 那条又只在装了 `llama-cli`
-   的本机跑。本次补第 15 组（假 `subprocess.run`）锁住它的实际行为：argv 里
+   的本机跑。本次补了 summarizer 组（假 `subprocess.run`）锁住它的实际行为：argv 里
    `-m <model>`、`-n 256`、`--single-turn`、`--no-display-prompt`、`timeout=180`；
    三种 prompt 分支（有证据 / 搜过但空 / 纯 direct 原样透传）；回显解析
    （`> prompt` 标记、`(truncated)` 尾切、`[Prompt:` 与 `Exiting...` 截尾）；
@@ -135,6 +142,8 @@ stale pin；核对方法：`gh run list --branch main` 取 id，`gh run view <id
 | 36733562274 | `4cb84e7` | 4 | `13 groups PASSED`、poi/reviews `ALL PASSED`、**jest `Tests: 5 passed`**（safe-area 自动 mock 在 Linux 上同样生效）、sensors `# pass 6 / # fail 0`、插件 `ℹ tests 13 / pass 13 / fail 0`、APK 39,614,178 字节（Artifact ID 11106012318） |
 | 36734675159 | `c6203a6` | 4 | 四 job 全 success（这版 markdown 之后 `13 groups` 已随测试补充变成 15，本行只记当时状态），APK 39,614,176 字节 |
 | 36735218413 | `c0b955b` | 4 | 四 job 全 success，rss 检索组已进入 CI 跑的离线套件，APK 39,614,177 字节 |
+| 36735766801 | `690dbcb` | 4 | `15 groups PASSED`（summarizer 组上 CI）、jest `Tests: 5 passed`、sensors `# pass 6`、插件 `ℹ tests 13`，APK 39,614,181 字节（ID 11107198666） |
+| 36736149701 | `aad8a54` | 4 | `15 groups PASSED`、jest 5、sensors 6、插件 13、APK 39,614,174 字节（ID 11107540923） |
 
 **APK 字节数不是 pin**：表里这几行落在 39,614,173 ~ 39,614,181 这 9 字节区间里，
 而中间几次只改了 markdown 或测试（zip 里的时间戳/顺序不进内容哈希）。这个数只证明

@@ -412,6 +412,54 @@ def test_summarizer_offline():
         assert sm.LLAMA_CLI == saved_cli and sm.CHAT_MODEL == saved_model
 
 
+# -- local kb retriever ------------------------------------------------------
+
+def test_local_kb_retriever():
+    import shutil
+    import tempfile
+    from core.retrievers import local as local_mod
+
+    tmp = tempfile.mkdtemp()
+    saved_kb = local_mod.KB_DIR
+    Q = "mpkg 一致性 校验"
+
+    def write(relpath, text):
+        p = os.path.join(tmp, *relpath.split("/"))
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        with open(p, "w", encoding="utf-8") as f:
+            f.write(text)
+
+    try:
+        local_mod.KB_DIR = tmp
+        assert local_mod.local_search(Q) == [], "empty kb must return no hits"
+
+        write("a/notes.md", "mpkg 记忆包用来保证一致性，校验由来源签名完成。")
+        write("b/weak.md", "这里只提到 mpkg 一个词。")
+        write("c/tool.py", "mpkg 一致性 校验 但扩展名不该被收")
+        write(".git/hidden.md", "mpkg 一致性 校验 位于 .git 里")
+        write("node_modules/dep.md", "mpkg 一致性 校验 位于依赖目录")
+        write("a/long.txt", "前缀填充。" * 60 + "mpkg 一致性 收尾")
+
+        hits = local_mod.local_search(Q)
+        assert len(hits) == 2, f"only the two scored files, no .py/.git/node_modules: {hits}"
+        assert hits[0].startswith("【本地库:a" + os.sep + "notes.md】"), hits[0]
+        assert "校验" in hits[0], hits[0]
+        assert "long.txt" in hits[1], hits[1]
+        body = hits[0].split("】", 1)[1]
+        assert len(body) <= 500, len(body)
+
+        one = local_mod.local_search(Q, topn=1)
+        assert len(one) == 1 and "notes.md" in one[0], one
+
+        local_mod.KB_DIR = os.path.join(tmp, "nope")
+        assert local_mod.local_search(Q) == [], "missing kb dir must not raise"
+        ok("local kb: extension filter, .git/node_modules pruned, score+anchor gate, "
+           "relpath label, 500-char window, topn")
+    finally:
+        local_mod.KB_DIR = saved_kb
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 if __name__ == "__main__":
     test_cue_routing()
     test_no_wikipedia_source()
@@ -422,6 +470,7 @@ if __name__ == "__main__":
     test_hits_are_deterministic()
     test_rate_limit_backoff()
     test_rss_retriever()
+    test_local_kb_retriever()
     test_summarizer_offline()
     test_loop_uses_new_gate()
     test_cli_json_contract()
