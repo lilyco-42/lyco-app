@@ -5,10 +5,10 @@
 
 | 模块 | 难度 | 负责人 | 耦合度 | 说明 |
 |------|------|--------|--------|------|
-| core/router | 低 | cline | 低 | 从 rag_loop.py 提取，纯函数 |
-| core/retrievers | 低 | cline | 低 | local/RSS/DeepWiki/wiki 四文件，互相独立 |
-| core/summarizer+verify | 低 | cline | 低 | 提取 + 去回显污染逻辑 |
-| services/poi | 低 | cline | 低 | 高德 place/around+detail 封装，Key 用户给 |
+| core/router | 低 | cline | 低 | ✅ 已交付（test_core 通过） |
+| core/retrievers | 低 | cline | 低 | ✅ 已交付 |
+| core/summarizer+verify | 低 | cline | 低 | ✅ 已交付 |
+| services/poi | 低 | cline+me | 低 | ✅ 已交付（cline 写架子，me 补完测试，7/7 通过） |
 | services/reviews | 中 | cline | 中 | 依赖 core 接口（router/retriever/summarizer） |
 | mobile/sensors | 中 | cline | 低 | RN 权限申请样板代码 |
 | mobile/ui | 中 | cline | 中 | RN 聊天页 + 地图页骨架，依赖 core 接口 |
