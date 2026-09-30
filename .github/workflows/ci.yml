@@ -24,7 +24,7 @@ jobs:
           python-version: "3.12"
       - name: install the only runtime dep
         run: pip install httpx
-      - name: core loop (offline: no model, no network)
+      - name: "core loop (offline: no model, no network)"
         run: python test_core_offline.py
       - name: services/poi
         run: python services/poi/test_poi.py
