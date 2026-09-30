@@ -13,3 +13,8 @@
 移动端推理：llama.cpp（Android .so 参考 huzpsb/llama_cpp_android_ci；
 RN 侧参考 a-ghorbani/pocketpal-ai 的接入方式）。
 地图：高德 Web Service（周边搜索 place/around + 详情 place/detail），Key 放本地配置。
+
+口径来源：这份 core 是 lyco-model `rag_loop.py` 的移植，为什么检索源里**没有维基百科**、
+verify 为什么对带单位的数字这么严，记在 `docs/MODULE_TASKS.md`
+"今日从 lyco-model 同步进 core 的"一节（实测依据在 lyco-model `DEMO_100rounds.md` §10-12）；
+把这些 Python 放上手机要先过 `docs/ON_DEVICE_PYTHON.md` 的审计。
