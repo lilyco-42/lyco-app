@@ -29,6 +29,15 @@ core (Python/Rust) ── rag_loop.py：router → 检索 → chat 总结 → ve
 关键限制（实测得出）：高德 `rating` 只返餐饮/酒店/景点/影院四类——
 理发店没有评分。所以"几家店"走高德 POI，"哪家好"走搜索聚合 + chat 总结。
 
+## 动作层（新增，autoglm 路线）
+
+- 采用 zai-org/Open-AutoGLM（★26k，Apache-2.0，官方开源手机 agent 模型+框架）为动作层参考：
+  截图/UI 树 → 模型决策 → 无障碍服务执行
+- 这才是"调用小红书评论"的合法解：不调 API（没有）、不爬虫（被封），
+  而是让端侧 agent 像用户一样打开 App 读屏。无障碍权限正是为此拿的
+- 双层架构：知识层（RAG 搜索聚合，现有 `rag_loop.py`）+ 动作层（AutoGLM 模式读屏操作）
+- Ruto-GLM（纯端侧后台自动化）做备选参考；注意它无 license 声明，代码只借鉴不引入
+
 ## 权限清单
 
 见 `docs/PERMISSIONS.md`。原则：侧载优先（SMS/通话记录类权限上架会被拒）。
