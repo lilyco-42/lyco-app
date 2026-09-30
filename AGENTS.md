@@ -23,10 +23,15 @@ python services/reviews/test_reviews.py
 node --test mobile/sensors/test_permissions.mjs
 cd mobile/app && npx tsc --noEmit && npx jest
 cd plugins/dsh-lyco-chat && node --test test_plugin.mjs
+cd mobile/app && npm run storybook:build   # 设计态预览（react-native-web），产物 storybook-static/
 ```
 
+改过 `mobile/app/package.json` 或 lock 之后，**必须再跑一次干净安装**再提交：
+本机 npm 是 11，CI 是 node 22 自带 npm 10，两者对 lock 的严格程度不同，
+只有 `rm -rf node_modules && npx npm@10 ci` 过了才算同步（npm 11 会放过 npm 10 拒绝的树）。
+
 Android/APK 只在 CI 构建：`.github/workflows/ci.yml`
-（python → mobile → plugin → android）。
+（python → mobile → plugin → preview → android）。
 `gradlew` 从 Windows 提交会丢执行位，workflow 里已 `chmod +x`；本地别补这个动作，
 也别在本地跑 gradle。
 
