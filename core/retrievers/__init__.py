@@ -45,7 +45,9 @@ def has_anchor(toks, text):
 
 def http():
     # Use system proxy from env (do NOT strip it); sanitize NO_PROXY
-    # (a bare ::1 entry crashes httpx's URL parser).
-    os.environ["NO_PROXY"] = "127.0.0.1,localhost"
+    # (a bare ::1 entry crashes httpx's URL parser). Drop the lowercase variant
+    # first: on Windows os.environ is case-insensitive, so popping it afterwards
+    # would delete the sanitized value set just above.
     os.environ.pop("no_proxy", None)
+    os.environ["NO_PROXY"] = "127.0.0.1,localhost"
     return httpx.Client(timeout=30)

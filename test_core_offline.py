@@ -460,6 +460,35 @@ def test_local_kb_retriever():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+# -- shared retriever helpers -------------------------------------------------
+
+def test_http_client_env():
+    from core.retrievers import http
+
+    saved = {k: os.environ.get(k) for k in ("NO_PROXY", "no_proxy")}
+    try:
+        # A bare ::1 entry used to crash httpx's environment-proxy parser. The
+        # lowercase variant is popped before NO_PROXY is written because on
+        # Windows os.environ is case-insensitive and popping afterwards would
+        # delete the value just set -- which is what used to happen.
+        os.environ["NO_PROXY"] = "127.0.0.1,::1"
+        os.environ["no_proxy"] = "::1,localhost"
+        client = http()
+        try:
+            got = [v for k, v in os.environ.items() if k.lower() == "no_proxy"]
+            assert got == ["127.0.0.1,localhost"], got
+            assert client.timeout.connect == 30.0, client.timeout
+        finally:
+            client.close()
+        ok("http(): NO_PROXY sanitized (no bare ::1) on both env casings, 30s timeout")
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+
 if __name__ == "__main__":
     test_cue_routing()
     test_no_wikipedia_source()
@@ -472,6 +501,7 @@ if __name__ == "__main__":
     test_rss_retriever()
     test_local_kb_retriever()
     test_summarizer_offline()
+    test_http_client_env()
     test_loop_uses_new_gate()
     test_cli_json_contract()
     print(f"\n{len(PASSED)} groups PASSED")

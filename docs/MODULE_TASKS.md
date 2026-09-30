@@ -26,14 +26,14 @@
 | 模块 | 表里的声明 | 命令 | 实测结果 |
 |------|-----------|------|----------|
 | core/router / retrievers / summarizer / verify | ✅ test_core 通过 | `python test_core.py` | 2 题 ALL PASSED；Q1 verify `overlap=2, on_topic=True`，Q2 `direct` |
-| core（新增，无模型无网络） | 本次补 | `python test_core_offline.py` | 16 组 PASS（`python -m core.cli` 输出契约、rss 检索组、local kb 组、summarizer 组均为本次补，见记录 4、5） |
+| core（新增，无模型无网络） | 本次补 | `python test_core_offline.py` | 17 组 PASS（`python -m core.cli` 输出契约、rss 检索组、local kb 组、summarizer 组、`http()` 组均为本次补，见记录 4-6） |
 | services/poi | ✅ 7/7 | `python services/poi/test_poi.py` | 7 条 PASS，ALL PASSED |
 | services/reviews | ✅ 5/5 | `python services/reviews/test_reviews.py` | 5 条 PASS，ALL PASSED |
 | mobile/sensors | ✅ node:test 6/6 | `node --test mobile/sensors/test_permissions.mjs` | 6 pass / 0 fail |
 | mobile/ui | ✅ tsc + jest | `npx tsc --noEmit`；`npx jest --ci` | tsc 退出码 0 无输出；jest 2 suites / 5 tests（复核时把模板那条空断言换成了真的双屏切换断言，见记录 3） |
 | plugins/dsh-lyco-chat | 本次新增 | `node --test test_plugin.mjs` | 13 pass / 0 fail（含走真 python + stub CLI 的端到端两条） |
 
-没有假声明，但五条必须说清：
+没有假声明，但六条必须说清：
 
 1. `test_core.py` 依赖 `llama-cli` 和 `D:/gal/AliceInCradle/kb` 的本地文件，换机器必红。
    因此新增 `test_core_offline.py`（检索 stub、`summarize_fn` 注入），CI 跑这份；
@@ -97,6 +97,18 @@
    `llama-cli` 的回显格式只有本机 `test_core.py` 证明过；而 lyco-model §10 的
    结论恰恰是"回显解析整段应当删掉，改用 `llama-server` 的 messages"。迁到
    server 时要连这组解析断言一起删，别把它当成要长期守的契约。
+6. **给 `core/retrievers/__init__.py` 的 `http()` 补测试时抓到一个真的 Windows-only bug，
+   已修。** 原顺序是先 `os.environ["NO_PROXY"] = "127.0.0.1,localhost"`
+   再 `os.environ.pop("no_proxy", None)`。Windows 的 `os.environ` 大小写不敏感，
+   第二行删掉的正是第一行刚写进去的那个键 —— 结果在本机上 `http()` 之后
+   `NO_PROXY` 直接为空，绕开本地地址的意图完全没生效；Linux 上两个键不同，
+   所以**这段代码在 CI 里永远是对的，只有本机测得出来**。
+   修法就是把顺序反过来（先清小写，再写大写），两个平台都得到同一个结果。
+   新增的 `http()` 组因此断言"环境里所有大小写形式的 no-proxy 合并后恰好等于
+   `127.0.0.1,localhost`"，在 Windows 和 Linux 上都成立、都有效：
+   把两行顺序还原回去，本机断言变成 `[]` 立即红；修正后 17 组绿。
+   这条同时是对"只在 CI 上验证"的一次警告 —— 铁律 1 让构建走 CI，
+   但平台差异只有本机这一份能暴露。
 
 ## 今日从 lyco-model 同步进 core 的（依据见 lyco-model/DEMO_100rounds.md §10-12）
 
