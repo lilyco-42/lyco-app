@@ -54,6 +54,27 @@ jobs:
       - name: sensors permissions (node:test)
         run: node --test mobile/sensors/test_permissions.mjs
 
+  plugin:
+    name: "DSH plugin (dsh-lyco-chat)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      LYCO_PY: python3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # node 22 cannot import a .ts file; the plugin test does
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: plugins/dsh-lyco-chat/package-lock.json
+      - name: npm ci
+        working-directory: plugins/dsh-lyco-chat
+        run: npm ci
+      - name: plugin tests
+        working-directory: plugins/dsh-lyco-chat
+        run: node --test test_plugin.mjs
+
   android:
     name: debug APK (gradle)
     runs-on: ubuntu-latest

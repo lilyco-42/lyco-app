@@ -3,3 +3,5 @@ __pycache__/
 .cache/
 *.gguf
 models/
+node_modules/
+plugins/dsh-lyco-chat/cordis.yml

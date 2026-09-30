@@ -196,6 +196,42 @@ def test_loop_uses_new_gate():
         loop.retrieve = orig_retrieve
 
 
+# -- cli contract (what the DSH plugin shells out to) -----------------------
+
+def test_cli_json_contract():
+    import io
+    import json
+
+    from core import cli
+
+    orig = loop.answer
+    try:
+        loop.answer = lambda q, **kw: {
+            "question": q, "response": "答案。", "evidence": EVIDENCE,
+            "retrieve_notes": ["local:1"], "total_elapsed": 0.5,
+            "rc": 0, "gen_ts": 90.0, "elapsed": 0.4, "routed_search": True,
+            "verify": verify(q, EVIDENCE, "答案。")}
+        buf = io.StringIO()
+        code = cli.run(["什么是 GGUF？"], out=buf)
+        d = json.loads(buf.getvalue())
+        assert code == 0 and d["mode"] == "ask", (code, d)
+        assert d["answer"] == "答案。" and d["routed_search"] is True
+        assert "verify" in d and "elapsed_s" in d
+
+        buf2 = io.StringIO()
+        code2 = cli.run([], out=buf2)
+        d2 = json.loads(buf2.getvalue())
+        assert code2 == 2 and "error" in d2, (code2, d2)
+
+        buf3 = io.StringIO()
+        code3 = cli.run(["--shops", "理发"], out=buf3)
+        d3 = json.loads(buf3.getvalue())
+        assert code3 == 2 and "lat" in d3["error"], (code3, d3)
+        ok("cli: one JSON object on stdout, exit 2 with {error} on bad input")
+    finally:
+        loop.answer = orig
+
+
 if __name__ == "__main__":
     test_cue_routing()
     test_no_wikipedia_source()
@@ -206,4 +242,5 @@ if __name__ == "__main__":
     test_hits_are_deterministic()
     test_rate_limit_backoff()
     test_loop_uses_new_gate()
+    test_cli_json_contract()
     print(f"\n{len(PASSED)} groups PASSED")

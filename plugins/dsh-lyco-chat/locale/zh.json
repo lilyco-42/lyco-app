@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "lyco 本地助手",
+    "description": "向 lyco 提问：本地知识库 + RustCC + DeepWiki 检索，由本地小模型总结；还能按评论证据给身边的店排序。"
+  }
+}

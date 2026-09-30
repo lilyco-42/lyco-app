@@ -12,7 +12,7 @@
 | services/reviews | 中 | cline | 中 | ✅ 已交付（5/5 通过，answer_fn 可注入） |
 | mobile/sensors | 中 | me | 低 | ✅ 已交付（bridge 可注入，node:test 6/6，无 RN 依赖） |
 | mobile/ui | 中 | me | 中 | ✅ 已交付（RN 0.87 脚手架 + 聊天/地图双屏 + API 桩，tsc 干净，jest 2 suites / 3 tests；Cline 余额耗尽） |
-| plugins/dsh-lyco-chat | 中 | me | 中 | 先读官方 DSH 插件 API 再定 |
+| plugins/dsh-lyco-chat | 中 | me | 中 | ✅ 最小交付（`lyco_ask` + `lyco_nearby_shops` 两个工具走 `python -m core.cli`，用真 `defineTool` 构造，`npm test` 13/13；**真在 Harness 里加载未验证**，本机没有 dsh 仓库检出，见 plugins/dsh-lyco-chat/README.md） |
 | mobile/inference | 高 | me | 中 | JNI/.so，真机验证跑不掉 |
 | core/action | 高 | 后期 | 高 | 无障碍 + AutoGLM，门控，默认关闭 |
 
@@ -63,6 +63,18 @@
 ## CI
 
 `.github/workflows/ci.yml`：`python`（离线 core + 两个 services）→
-`mobile`（tsc / jest / sensors）→ `android`（`./gradlew assembleDebug` + APK 产物）。
-按铁律 1，本机不构建，Android 只在 CI 出。注意 `gradlew` 从 Windows 提交时丢了执行位，
-workflow 里显式 `chmod +x`。
+`mobile`（tsc / jest / sensors）→ `plugin`（DSH 插件测试，node 24 + `LYCO_PY=python3`）
+→ `android`（`./gradlew assembleDebug` + APK 产物）。
+按铁律 1，本机不构建，Android 只在 CI 出。`gradlew` 从 Windows 提交时丢了执行位，
+已在 git 索引里补成 `100755`，workflow 里另留一次 `chmod +x` 兜底。
+
+首次实跑（run 36729302532，2026-09-30）：python / mobile / android 三个 job 全绿，
+APK 产物上传成功。第一次推送是 0 秒失败的 —— step 名字里写了 `offline: no model`
+这个冒号，YAML 直接解析失败，GitHub 连 job 都没建；现在本地用 `python -c "import yaml"`
+先验一遍再推。
+
+## 关于 deepseek-harness 的一个坑
+
+它默认分支是 **`master`**。上一轮 AI 用 `main` 去请求 `contents/docs/development.md`
+和 `contents/apps/desktop`，一直 404，然后重复发同一条命令直到卡死循环。
+本次先 `GET /repos/...` 读 `default_branch` 再取路径，一次就拿到了插件契约。

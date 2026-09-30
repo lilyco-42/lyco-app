@@ -1,0 +1,31 @@
+{
+  "name": "@lyco/dsh-lyco-chat",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "lyco OODA loop and nearby-shop ranking as DeepSeek Harness tools",
+  "main": "src/lyco_chat.ts",
+  "exports": {
+    ".": "./src/lyco_chat.ts",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "files": [
+    "src/lyco_chat.ts",
+    "src/runner.js",
+    "locale/*.json",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test test_plugin.mjs",
+    "patch": "node write_patch.mjs"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.4",
+    "@deepseek-ai/dsh-tools": "^0.0.1-rc.1"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.4",
+    "@deepseek-ai/dsh-tools": "^0.0.1-rc.1"
+  }
+}

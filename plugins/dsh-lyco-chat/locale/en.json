@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Lyco Local Assistant",
+    "description": "Ask lyco: retrieval over your local knowledge base, RustCC and DeepWiki, summarized by a local model, plus nearby-shop ranking from review evidence."
+  }
+}
