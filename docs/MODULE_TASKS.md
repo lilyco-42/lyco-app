@@ -11,7 +11,7 @@
 | services/poi | 低 | cline+me | 低 | ✅ 已交付（cline 写架子，me 补完测试，7/7 通过） |
 | services/reviews | 中 | cline | 中 | ✅ 已交付（5/5 通过，answer_fn 可注入） |
 | mobile/sensors | 中 | me | 低 | ✅ 已交付（bridge 可注入，node:test 6/6，无 RN 依赖） |
-| mobile/ui | 中 | me | 中 | ✅ 已交付（RN 0.87 脚手架 + 聊天/地图双屏 + API 桩，tsc 干净，jest 2 suites / 3 tests；Cline 余额耗尽） |
+| mobile/ui | 中 | me | 中 | ✅ 已交付（RN 0.87 脚手架 + 聊天/地图双屏 + API 桩，tsc 干净，jest 2 suites / 3 tests；**但只在 test-renderer 里浅渲染过，没上真机**，见复核记录 3；Cline 余额耗尽） |
 | plugins/dsh-lyco-chat | 中 | me | 中 | ✅ 最小交付（`lyco_ask` + `lyco_nearby_shops` 两个工具走 `python -m core.cli`，用真 `defineTool` 构造，`npm test` 13/13；**真在 Harness 里加载未验证**，本机没有 dsh 仓库检出，见 plugins/dsh-lyco-chat/README.md） |
 | mobile/inference | 高 | me | 中 | JNI/.so，真机验证跑不掉。端侧 Python 可行性已审计完 → `docs/ON_DEVICE_PYTHON.md`（唯一阻塞点是 `core/summarizer.py` 那一处 `subprocess`；建议 Chaquopy 装解释器 + 自带 llama.cpp `.so`） |
 | core/action | 高 | 后期 | 高 | 无障碍 + AutoGLM，门控，默认关闭 |
@@ -26,18 +26,23 @@
 | 模块 | 表里的声明 | 命令 | 实测结果 |
 |------|-----------|------|----------|
 | core/router / retrievers / summarizer / verify | ✅ test_core 通过 | `python test_core.py` | 2 题 ALL PASSED；Q1 verify `overlap=2, on_topic=True`，Q2 `direct` |
-| core（新增，无模型无网络） | 本次补 | `python test_core_offline.py` | 12 组 PASS |
-| services/poi | ✅ 7/7 | `python services/poi/test_poi.py` | 7 PASS，ALL PASSED |
-| services/reviews | ✅ 5/5 | `python services/reviews/test_reviews.py` | 5 PASS |
+| core（新增，无模型无网络） | 本次补 | `python test_core_offline.py` | 13 组 PASS（末组为 `python -m core.cli` 的输出契约：恒一个 JSON、坏输入 exit 2） |
+| services/poi | ✅ 7/7 | `python services/poi/test_poi.py` | 7 条 PASS，ALL PASSED |
+| services/reviews | ✅ 5/5 | `python services/reviews/test_reviews.py` | 5 条 PASS，ALL PASSED |
 | mobile/sensors | ✅ node:test 6/6 | `node --test mobile/sensors/test_permissions.mjs` | 6 pass / 0 fail |
-| mobile/ui | ✅ tsc + jest | `npx tsc --noEmit`；`npx jest` | tsc 无输出；jest 2 suites / 3 tests |
+| mobile/ui | ✅ tsc + jest | `npx tsc --noEmit`；`npx jest --ci` | tsc 退出码 0 无输出；jest 2 suites / 3 tests |
+| plugins/dsh-lyco-chat | 本次新增 | `node --test test_plugin.mjs` | 13 pass / 0 fail（含走真 python + stub CLI 的端到端两条） |
 
-没有假声明，但两条必须说清：
+没有假声明，但三条必须说清：
 
 1. `test_core.py` 依赖 `llama-cli` 和 `D:/gal/AliceInCradle/kb` 的本地文件，换机器必红。
    因此新增 `test_core_offline.py`（检索 stub、`summarize_fn` 注入），CI 跑这份；
    前者留作本机 smoke。
 2. 环境里没装 pytest，services 的测试是脚本自带入口直接跑，不是 pytest 收集。
+3. **mobile/ui 从没被真正渲染过。** jest 那条 `App.test.tsx` 只是
+   `react-test-renderer` 浅渲染一次且不断言任何内容，证明"模块图能建起来、不抛异常"；
+   CI 的 android job 证明 APK 能链接产出，但两个 APK 都没装进设备或模拟器。
+   所以"双屏可用"目前是静态检查级别，不是视觉验证级别 —— 需要一次真机 smoke 才能升格。
 
 ## 今日从 lyco-model 同步进 core 的（依据见 lyco-model/DEMO_100rounds.md §10-12）
 
@@ -74,6 +79,12 @@ GitHub 连 job 都没建（`gh run view --log` 只会说 log not found）。现�
 修好后两次全绿：run 36729302532（python / mobile / android，APK 产物 `lycoapp-debug`
 39,614,181 字节）、run 36730689189（加上 plugin job，Linux + `LYCO_PY=python3` + node 24，
 13 项插件测试同样通过）。
+第三次全绿是 run 36732136945（HEAD `d3ae4f1`，四个 job 全 `completed/success`，
+APK 39,614,174 字节）。**APK 字节数不是 pin**：只改 markdown 的一次提交里它就少了 7 字节
+（zip 里的时间戳/顺序不进内容哈希），所以这个数只证明"产物真的建出来并上传了"，
+不要拿它当回归基线。
+
+CI 从没证明的事：APK 只构建、没安装。整个仓库目前没有任何一层跑过真机或模拟器。
 
 ## 关于 deepseek-harness 的一个坑
 

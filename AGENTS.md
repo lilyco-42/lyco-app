@@ -22,9 +22,11 @@ python services/poi/test_poi.py        # 高德封装，脚本自带入口（环
 python services/reviews/test_reviews.py
 node --test mobile/sensors/test_permissions.mjs
 cd mobile/app && npx tsc --noEmit && npx jest
+cd plugins/dsh-lyco-chat && node --test test_plugin.mjs
 ```
 
-Android/APK 只在 CI 构建：`.github/workflows/ci.yml`（python → mobile → android）。
+Android/APK 只在 CI 构建：`.github/workflows/ci.yml`
+（python → mobile → plugin → android）。
 `gradlew` 从 Windows 提交会丢执行位，workflow 里已 `chmod +x`；本地别补这个动作，
 也别在本地跑 gradle。
 
