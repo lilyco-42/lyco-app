@@ -37,6 +37,12 @@ core (Python/Rust) ── rag_loop.py：router → 检索 → chat 总结 → ve
 
 见 `core/README.md`。模型（`lyco42/*-0.6b` GGUF）、`rag_loop.py`、lyco-ip 角色资产。
 
+## 范围决议（已确认）
+
+- 手机端先安卓（侧载，权限全开）；iOS 后续再议
+- 口碑走站内搜索聚合，不直爬小红书/贴吧/快手/QQ墙（无公开 API + 反爬）
+- 桌面端 Tauri 为二期（暂定）
+
 ## 路线图
 
 1. RN 空壳 + 端侧模型跑通（PocketPal 抄作业）+ 聊天页
