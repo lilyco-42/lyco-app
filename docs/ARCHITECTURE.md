@@ -10,13 +10,14 @@ lyco-app/
     inference/            # 端侧 GGUF（llama.cpp .so，抄 PocketPal 接入）
     sensors/              # 定位/相机/麦克风/通知封装
   plugins/
-    dsh-lyco-chat/        # 官方 DSH 桌面插件（二期）
+    dsh-lyco-chat/        # 官方 DSH 桌面插件（已最小交付：2 个工具 + 13 项测试）
   core/                   # 与端无关，可被 mobile/desktop 共用
     router/               # 搜 vs 直答（关键词规则，不用模型判）
-    retrievers/           # local kb / RSS / DeepWiki MCP / wiki
+    retrievers/           # local kb / RSS / DeepWiki MCP（维基已删，本机出口全 403）
     summarizer/           # chat-slm，只做总结
-    verify/               # 证据交集检查 + 认不知道
+    verify/               # claim 级：数字/单位声明必须有证据 + 认不知道
     action/               # 后期：AutoGLM 模式读屏操作（无障碍）
+    cli.py                # python -m core.cli：一个 JSON 对象，给插件/脚本调用
   services/
     poi/                  # 高德 place/around + place/detail
     reviews/              # site: 搜索聚合 → 复用 rag_loop.py

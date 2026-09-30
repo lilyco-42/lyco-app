@@ -68,10 +68,12 @@
 按铁律 1，本机不构建，Android 只在 CI 出。`gradlew` 从 Windows 提交时丢了执行位，
 已在 git 索引里补成 `100755`，workflow 里另留一次 `chmod +x` 兜底。
 
-首次实跑（run 36729302532，2026-09-30）：python / mobile / android 三个 job 全绿，
-APK 产物上传成功。第一次推送是 0 秒失败的 —— step 名字里写了 `offline: no model`
-这个冒号，YAML 直接解析失败，GitHub 连 job 都没建；现在本地用 `python -c "import yaml"`
-先验一遍再推。
+首次推送 0 秒失败：step 名字里写了 `offline: no model` 这个冒号，YAML 直接解析失败，
+GitHub 连 job 都没建（`gh run view --log` 只会说 log not found）。现在本地先
+`python -c "import yaml; yaml.safe_load(...)"` 验一遍再推。
+修好后两次全绿：run 36729302532（python / mobile / android，APK 产物 `lycoapp-debug`
+39,614,181 字节）、run 36730689189（加上 plugin job，Linux + `LYCO_PY=python3` + node 24，
+13 项插件测试同样通过）。
 
 ## 关于 deepseek-harness 的一个坑
 
