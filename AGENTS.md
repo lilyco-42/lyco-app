@@ -34,3 +34,7 @@ Android/APK 只在 CI 构建：`.github/workflows/ci.yml`（python → mobile �
 `lyco-model/DEMO_100rounds.md` §10-12 的实测结论：Wikipedia 已判死（本机出口全 403）、
 verify 查的是 claim 不只是关键词重叠、DeepWiki 只重试限流、`-c` 会被 `-np` 按槽位拆分。
 要动 core 前先读那三节，别把修过的洞再挖回来。
+
+要把 core 搬进手机时先读 `docs/ON_DEVICE_PYTHON.md`：安卓只能嵌入式模式（没有
+`python`/`pip`、`stdout` 进 logcat），子进程不被官方支持 —— 全仓库只有
+`core/summarizer.py` 一处 `subprocess` 需要换成 JNI。

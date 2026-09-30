@@ -13,7 +13,7 @@
 | mobile/sensors | 中 | me | 低 | ✅ 已交付（bridge 可注入，node:test 6/6，无 RN 依赖） |
 | mobile/ui | 中 | me | 中 | ✅ 已交付（RN 0.87 脚手架 + 聊天/地图双屏 + API 桩，tsc 干净，jest 2 suites / 3 tests；Cline 余额耗尽） |
 | plugins/dsh-lyco-chat | 中 | me | 中 | ✅ 最小交付（`lyco_ask` + `lyco_nearby_shops` 两个工具走 `python -m core.cli`，用真 `defineTool` 构造，`npm test` 13/13；**真在 Harness 里加载未验证**，本机没有 dsh 仓库检出，见 plugins/dsh-lyco-chat/README.md） |
-| mobile/inference | 高 | me | 中 | JNI/.so，真机验证跑不掉 |
+| mobile/inference | 高 | me | 中 | JNI/.so，真机验证跑不掉。端侧 Python 可行性已审计完 → `docs/ON_DEVICE_PYTHON.md`（唯一阻塞点是 `core/summarizer.py` 那一处 `subprocess`；建议 Chaquopy 装解释器 + 自带 llama.cpp `.so`） |
 | core/action | 高 | 后期 | 高 | 无障碍 + AutoGLM，门控，默认关闭 |
 
 派单规则：低难度低耦合先行；cline 单子必须带验收标准（测试通过）；
