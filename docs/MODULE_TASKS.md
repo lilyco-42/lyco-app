@@ -169,6 +169,62 @@ stale pin；核对方法：`gh run list --branch main` 取 id，`gh run view <id
 
 CI 从没证明的事：APK 只构建、没安装。整个仓库目前没有任何一层跑过真机或模拟器。
 
+## 界面预览（A 段：react-native-web，采用现成方案）
+
+之前唯一能"看"的手段是我手搓的 HTML：把 `react-test-renderer` 的组件树翻成 CSS。
+它**看着对但会骗人**，所以换成了 Storybook 的 `@storybook/react-native-web-vite`
+（10.6.0）+ `react-native-web`（0.21.3），peer 核对过我们这套：
+RN ≥ 0.74.5 ✓、react ^19 ✓、vite ^7 ✓。GitHub 上先例充分（22k★、MIT、本月还在推），
+没有自研理由。
+
+命令与产物：
+
+```bash
+cd mobile/app && npm run storybook:build   # -> storybook-static/（已 gitignore）
+cd mobile/app && npm run storybook         # 本机 http://localhost:6006 边改边看
+```
+
+CI 的 `preview` job 跑同一条 build，并**断言三条 story id 都在**
+（`app-root--chat-tab` / `screens--chat` / `screens--nearby`），产物整站上传成
+`storybook-preview`。第一次 CI 绿是 run 36752926806；把该 run 的产物下回来解包核过：
+`index.json` 里正是那三条 id，`assets/*.js` 里能搜到 `地图占位`、`问 Lyco 点什么`、
+`搜身边` 和 `react-native-web`，说明 Linux 上构建出来的确实是这两屏。
+
+本机实测（chrome headless 出图 + `getBoundingClientRect` / `getComputedStyle` 量 DOM，
+量的是 `app-root--chat-tab` 与 `screens--nearby` 两条 story）：
+
+| 量到的东西 | 真渲染的值 |
+|-----------|-----------|
+| 地图占位块 | h=**180** w=366 bg=`rgb(229,231,235)` radius=8 |
+| 启用 tab「身边」 | `<button disabled=false>` bg=`rgb(33,150,243)`，白字，h=36 w=44，radius=2 |
+| 禁用 tab「聊天」 | `<button disabled=true>` bg=`rgb(223,223,223)`，文字层 `rgb(161,161,161)`（外层写的是 `rgba(16,16,16,.3)`，合成后是 #a1a1a1） |
+| 聊天输入框 | 外层盒 h=46，`<input>` 本体 h=40，`placeholder="问 Lyco 点什么…"` |
+| 两屏内容 | 底边都在 390×844 框内（overflow −1px） |
+
+注意 goal 里写的"禁用态 `#cdcdcd`"是**手搓 HTML 那版**的说法（我照抄了 RN 默认的
+`color: '#cdcdcd'` 猜测），真渲染下 RNW 走的是 Material 配色 `#dfdfdf`/`#a1a1a1`。
+这正是要用真组件而不是近似图的理由。
+
+它立刻抓到两件手搓 HTML 永远看不出来的事：
+
+1. **`RN <Button>` 的文案会被强制大写**：真图上是「搜身边 1**K**M」。
+   RNW 和 Android 原生都做 textAllCaps，所以**真机也一样** —— 我之前的假图画成了
+   蓝色纯文本，这就是"感觉有点歪"的直接来源。要不要改文案（比如写"1 公里"）是产品决定，
+   我只把它记在这里，不擅自改用户可见文案。
+2. **Windows 上 `import App from './App'` 解析到的是 `app.json`，不是 `App.tsx`**
+   （文件系统大小写不敏感 + vite 的扩展名解析）。Storybook 于是把一个 JSON 对象当组件挂载，
+   报 `Element type is invalid ... got: object`，而报错里那句
+   `hookified` 是 Storybook preview runtime 的内部函数名，**完全指不到真凶**。
+   定位方法：把 App 的 JSX 一件件拆开各写一条 story 逐个 dump DOM 比对，
+   再直接打印 `Object.keys(App)` —— 得到 `[name, displayName]`，正是 app.json 的两个键。
+   修法：写全扩展名 `./App.tsx`。
+
+边界（照写）：`react-native-safe-area-context` 没有 web 入口，`.storybook/main.ts`
+用 `enforce: 'pre'` 的 vite 插件把它别名到一个零 inset 的透传 shim，
+**只有预览 lane 用得到**，RN 应用和 jest lane 仍走真包。
+RNW 给的是布局真相，不是 Android 皮肤真相：按钮、字体度量、滚动条仍是浏览器样式；
+真机像素由下面的 `device` job 负责。
+
 ## 关于 deepseek-harness 的一个坑
 
 它默认分支是 **`master`**。上一轮 AI 用 `main` 去请求 `contents/docs/development.md`

@@ -143,8 +143,14 @@ jobs:
 
   device:
     name: "emulator screenshots (pixel truth)"
-    runs-on: ubuntu-latest
+    # GitHub's Linux runners give this job no /dev/kvm, so an x86_64 AVD has to
+    # software-emulate and never boots inside the timeout. Apple Silicon runners
+    # run the arm64 image on real CPU emulation-free hardware.
+    runs-on: macos-14
     timeout-minutes: 45
+    # Expensive lane (macOS minutes are metered at a multiplier), so it is
+    # on-demand; `preview` is the every-push design-time lane.
+    if: github.event_name == 'workflow_dispatch'
     needs: [android]
     steps:
       - uses: actions/checkout@v4
@@ -182,7 +188,7 @@ jobs:
         uses: ReactiveCircus/android-emulator-runner@v2
         with:
           api-level: 33
-          arch: x86_64
+          arch: aarch64
           target: google_apis
           disable-animations: true
           script: |

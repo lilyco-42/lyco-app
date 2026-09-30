@@ -31,7 +31,12 @@ cd mobile/app && npm run storybook:build   # 设计态预览（react-native-web�
 只有 `rm -rf node_modules && npx npm@10 ci` 过了才算同步（npm 11 会放过 npm 10 拒绝的树）。
 
 Android/APK 只在 CI 构建：`.github/workflows/ci.yml`
-（python → mobile → plugin → preview → android）。
+（python → mobile → plugin → preview → android，外加按需的 device）。
+`device` job 在 **macOS arm64 runner** 上用 API 33 aarch64 模拟器真装真点，产出
+`emulator-screenshots` 产物；Linux runner 拿不到 `/dev/kvm`，x86_64 AVD 软件模拟
+启动不进来，所以这条只能在 macOS 上跑。macOS 分钟按倍率计费，因此它
+**只在 `workflow_dispatch` 时跑**：`gh workflow run ci.yml`（dispatch 默认就在 main 上）。
+改 UI 时日常看 `storybook-preview`（每次 push 都出），要像素真相再手动触发 device。
 `gradlew` 从 Windows 提交会丢执行位，workflow 里已 `chmod +x`；本地别补这个动作，
 也别在本地跑 gradle。
 
