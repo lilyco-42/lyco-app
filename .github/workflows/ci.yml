@@ -1,0 +1,86 @@
+name: ci
+
+# AGENTS.md rule 1: nothing gets compiled or built on the dev machine.
+# Python/node tests and the Android build all run here instead.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: python core + services tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: install the only runtime dep
+        run: pip install httpx
+      - name: core loop (offline: no model, no network)
+        run: python test_core_offline.py
+      - name: services/poi
+        run: python services/poi/test_poi.py
+      - name: services/reviews
+        run: python services/reviews/test_reviews.py
+
+  mobile:
+    name: typecheck + jest + sensors
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: mobile/app/package-lock.json
+      - name: npm ci
+        working-directory: mobile/app
+        run: npm ci
+      - name: tsc --noEmit
+        working-directory: mobile/app
+        run: npx tsc --noEmit
+      - name: jest
+        working-directory: mobile/app
+        run: npx jest --ci
+      - name: sensors permissions (node:test)
+        run: node --test mobile/sensors/test_permissions.mjs
+
+  android:
+    name: debug APK (gradle)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: [python, mobile]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: mobile/app/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: npm ci
+        working-directory: mobile/app
+        run: npm ci
+      - name: gradlew lost its exec bit when the tree was committed from Windows
+        run: chmod +x mobile/app/android/gradlew
+      - name: assembleDebug
+        working-directory: mobile/app/android
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+      - name: upload apk
+        uses: actions/upload-artifact@v4
+        with:
+          name: lycoapp-debug
+          path: mobile/app/android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error

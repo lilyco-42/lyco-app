@@ -1,12 +1,27 @@
-"""Summarizer: local chat model via llama-cli (never tested on memory)."""
+"""Summarizer: local chat model via llama-cli.
+
+Both paths are environment-overridable so this module is usable off this one
+machine (and so CI can import it at all):
+
+    LYCO_LLAMA_CLI   the llama.cpp binary
+    LYCO_CHAT_MODEL  a Q4_K_M GGUF
+
+Deployment note measured in lyco-model (results/server_bench.json): when this
+moves to llama-server, `-c` is the *total* context and `-np` splits it across
+slots -- -np 4 with -c 8192 leaves each slot 2048 tokens and an evidence+history
+prompt is rejected outright (HTTP 400). Raise -c and -np together, or run one
+instance per model.
+"""
 import os
 import re
 import subprocess
 import time
 
-LLAMA_CLI = r"D:\APP\scoop\shims\llama-cli.exe"
-CHAT_MODEL = (r"D:\gal\AliceInCradle\lyco-model\models"
-              r"\chat_slm_qwen3_0p6b-Q4_K_M.gguf")
+LLAMA_CLI = os.environ.get(
+    "LYCO_LLAMA_CLI", r"D:\APP\scoop\shims\llama-cli.exe")
+CHAT_MODEL = os.environ.get(
+    "LYCO_CHAT_MODEL",
+    r"D:\gal\AliceInCradle\lyco-model\models\chat_slm_qwen3_0p6b-Q4_K_M.gguf")
 
 
 def dec(b):

@@ -43,7 +43,11 @@ def main():
     assert r2["routed_search"] is False, "Q2 must be routed direct"
     assert r2["evidence"] == [], "Q2 must have no evidence"
     assert r2["retrieve_notes"] == ["router:direct"]
-    assert r2["verify"] == {"pass": True, "reason": "direct"}
+    # verify gained fields when the gate was ported from lyco-model (a direct
+    # turn now reports the numbers it checked), so assert the parts that matter
+    # instead of the whole dict shape.
+    assert r2["verify"]["pass"] is True and r2["verify"]["reason"] == "direct", r2["verify"]
+    assert r2["verify"]["invented_numbers"] == [], r2["verify"]
     assert r2["response"].strip(), "Q2 must get a response from the model"
     assert r2["rc"] == 0, "summarizer must exit cleanly for Q2"
 

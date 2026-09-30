@@ -10,5 +10,27 @@
 
 ## 模块分工
 
-见 `docs/MODULE_TASKS.md`（难度 / 负责人 / 耦合度）。
+见 `docs/MODULE_TASKS.md`（难度 / 负责人 / 耦合度，含 2026-09-30 的逐条复核记录）。
 Cline 派单用免费模型（当前：`z-ai/glm-5.3-flash`），单子必须带验收标准。
+
+## 测试入口（改完必须自己跑一遍再提交）
+
+```bash
+python test_core_offline.py            # core 逻辑：无模型、无网络，CI 跑这份
+python test_core.py                    # 本机 smoke：需要 llama-cli + D:/gal/AliceInCradle/kb
+python services/poi/test_poi.py        # 高德封装，脚本自带入口（环境里没有 pytest）
+python services/reviews/test_reviews.py
+node --test mobile/sensors/test_permissions.mjs
+cd mobile/app && npx tsc --noEmit && npx jest
+```
+
+Android/APK 只在 CI 构建：`.github/workflows/ci.yml`（python → mobile → android）。
+`gradlew` 从 Windows 提交会丢执行位，workflow 里已 `chmod +x`；本地别补这个动作，
+也别在本地跑 gradle。
+
+## core 的事实来源
+
+`core/` 是 lyco-model `rag_loop.py` 的移植，两边同步靠
+`lyco-model/DEMO_100rounds.md` §10-12 的实测结论：Wikipedia 已判死（本机出口全 403）、
+verify 查的是 claim 不只是关键词重叠、DeepWiki 只重试限流、`-c` 会被 `-np` 按槽位拆分。
+要动 core 前先读那三节，别把修过的洞再挖回来。
