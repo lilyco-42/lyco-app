@@ -1,0 +1,55 @@
+name: emu-probe
+
+# Temporary, dispatch-only. Purpose: replace the inference "GitHub's macOS
+# runners cannot boot an AVD" with a measurement, since the device lane's three
+# failures there only ever showed a boot timeout, not why.
+# Delete this file once the answer is recorded in docs/MODULE_TASKS.md.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: "hypervisor facts on a macOS runner"
+    runs-on: macos-14
+    timeout-minutes: 10
+    steps:
+      - name: cpu / hypervisor / emulator acceleration
+        run: |
+          echo "arch=$(uname -m)"
+          echo "cpu=$(sysctl -n machdep.cpu.brand_string)"
+          echo "kern.hv_support=$(sysctl -n kern.hv_support 2>&1)"
+          echo "hypervisor_present=$(sysctl -n kern.hv_maxcpu 2>&1) (max CPUs the hypervisor allows)"
+          system_profiler SPHardwareDataType 2>/dev/null | grep -iE "model|chip|memory" | head -4
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          ls "$ANDROID_HOME" 2>/dev/null | tr '\n' ' '
+          echo
+          echo "--- emulator -accel-check:"
+          "$ANDROID_HOME/emulator/emulator" -accel-check 2>&1 || echo "accel-check exit=$?"
+          "$ANDROID_HOME/emulator/emulator" -version 2>&1 | head -2
+      - name: what is preinstalled
+        run: |
+          echo "--- system images on the image:"
+          find "$ANDROID_HOME/system-images" -maxdepth 3 -mindepth 3 -type d 2>/dev/null | sed "s|$ANDROID_HOME/||" | head -20
+          echo "--- avds:"
+          "$ANDROID_HOME/emulator/emulator" -list-avds 2>&1 | head -5
+          echo "--- hvf kernel extension / framework:"
+          kextstat 2>/dev/null | grep -i hvf || echo "kextstat shows no HVF kext (or is not permitted)"
+          ls -d /System/Library/Frameworks/Hypervisor.framework 2>&1
+      - name: can the hypervisor actually be entered from userspace
+        run: |
+          cat > /tmp/hvf_probe.c <<'C'
+          #include <stdio.h>
+          #include <Hypervisor/Hypervisor.h>
+          int main(void) {
+            hv_return_t r = hv_vm_create(HV_VM_DEFAULT);
+            printf("hv_vm_create -> %d (%s)\n", r, r == kHvSuccess ? "SUCCESS: nested virt works" : "DENIED: no hypervisor for this process");
+            if (r == kHvSuccess) hv_vm_destroy();
+            return r == kHvSuccess ? 0 : 1;
+          }
+          C
+          clang -framework Hypervisor /tmp/hvf_probe.c -o /tmp/hvf_probe 2>&1 | tail -3
+          /tmp/hvf_probe; echo "hvf_probe exit=$?"
