@@ -245,6 +245,7 @@ jobs:
     # instead of an assertion about untested YAML.
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    needs: [android]
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run_device == 'true'
     permissions:
       contents: read
@@ -253,15 +254,16 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: fetch the release APK the device job would install
+        uses: actions/download-artifact@v4
+        with:
+          name: lycoapp-release
+          path: apk
+
+      - name: it must really be the file the device job points at
         run: |
           set -e
-          RID=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=lycoapp-release&per_page=1" \
-            --jq '.artifacts[0].workflow_run.id')
-          test -n "$RID"
-          echo "latest lycoapp-release belongs to run $RID"
-          gh run download "$RID" -n lycoapp-release -D apk
-          test -f apk/app-release.apk
           ls -l apk
+          test -f apk/app-release.apk
 
       - name: the bundle must really be inside it
         run: |
