@@ -26,6 +26,12 @@ cd plugins/dsh-lyco-chat && node --test test_plugin.mjs
 cd mobile/app && npm run storybook:build   # 设计态预览（react-native-web），产物 storybook-static/
 ```
 
+本机 `python` 有可能解析到 scoop 的 uv shim（3.11，**里面没装 httpx**），
+那份解释器跑 `test_core_offline.py` / `services/poi/test_poi.py` 会在 import 处就
+`ModuleNotFoundError: No module named 'httpx'` —— 不是代码坏了。换一个装了 httpx 的解释器
+（实测 `D:/app/scoop/apps/python/current/python` = 3.14.7 + httpx 0.28.1 全绿）或先 `pip install httpx`；
+CI 侧由 workflow 里的 `pip install httpx` 负责。
+
 改过 `mobile/app/package.json` 或 lock 之后，**必须再跑一次干净安装**再提交：
 本机 npm 是 11，CI 是 node 22 自带 npm 10，两者对 lock 的严格程度不同，
 只有 `rm -rf node_modules && npx npm@10 ci` 过了才算同步（npm 11 会放过 npm 10 拒绝的树）。
