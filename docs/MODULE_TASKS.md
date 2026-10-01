@@ -196,6 +196,17 @@ enterprises using the GitHub Team or GitHub Enterprise Cloud plans"*
 workflow 文件里已写明**它在当前账号下不可调度、因此从未运行验证过**。
 真机像素改由本机模拟器出，见下一节。
 
+**要让 CI 真的出像素，只有这三条路，都要你点头：**
+
+| 路 | 代价 | 谁动手 |
+|----|------|--------|
+| 仓库搬进 org 并升 Team 计划（按人月计费） | 唯一"官方"解，`device` job 现成可用 | 你建 org + 挂卡 + transfer |
+| 第三方带安卓模拟器的 CI（Codemagic / Cirrus RUNS-On 等） | 另开账号、另一套配额与日志 | 你注册并授权 |
+| 本机挂一个 self-hosted runner | 免费，但要常驻第三方进程 + 注册 token，且吃你这台机器的资源 | 你确认后我再装 |
+
+标准 `ubuntu-latest` 与 macOS runner 都不行（前者无 `/dev/kvm`，后者实测起不来），
+软件模拟（TCG）在 45 分钟窗口内也起不来，所以不是"再调调参数"能解决的。
+
 ## 界面预览（A 段：react-native-web，采用现成方案）
 
 之前唯一能"看"的手段是我手搓的 HTML：把 `react-test-renderer` 的组件树翻成 CSS。
