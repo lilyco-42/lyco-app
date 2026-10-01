@@ -32,15 +32,6 @@ jobs:
           echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd \
             -n probe -k "system-images;android-34;google_apis;arm64-v8a" -d pixel_7 2>&1 | tail -3
           "$ANDROID_HOME/emulator/emulator" -list-avds
-      - name: grab the CI release apk (bundle embedded, so no metro needed)
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -e
-          rid=$(gh run list --workflow ci.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId')
-          echo "downloading lycoapp-release from run $rid"
-          gh run download "$rid" -n lycoapp-release -D "$GITHUB_WORKSPACE/apk"
-          ls -la "$GITHUB_WORKSPACE/apk"
       - name: boot it
         run: |
           nohup "$ANDROID_HOME/emulator/emulator" -avd probe -no-window -no-audio -no-boot-anim \
@@ -63,6 +54,19 @@ jobs:
           name: emulator-log
           path: /tmp/emu.log
           if-no-files-found: warn
+      - name: grab the CI release apk (bundle embedded, so no metro needed)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          # Only dispatch runs build the release variant, so walk recent successful
+          # ci.yml runs until one actually carries the artifact.
+          for rid in $(gh run list --workflow ci.yml --status success --limit 12 --json databaseId --jq '.[].databaseId'); do
+            if gh run download "$rid" -n lycoapp-release -D "$GITHUB_WORKSPACE/apk" 2>/dev/null; then
+              echo "got lycoapp-release from run $rid"; break
+            fi
+          done
+          ls -la "$GITHUB_WORKSPACE/apk"
       - name: drive the app and screenshot
         if: success()
         run: |
