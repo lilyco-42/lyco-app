@@ -93,14 +93,21 @@ def wait_stable(serial, local, timeout=120, gap=3):
     )
 
 
-def inset(serial, kind):
+def try_inset(serial, kind):
     """The frame the system window occupies, straight from the window manager."""
     out = adb("shell", "dumpsys", "window", serial=serial)
     m = re.search(rf"type={kind} frame=\[(\d+),(\d+)\]\[(\d+),(\d+)\]", out)
     if not m:
-        raise SystemExit(f"could not read the {kind} inset from dumpsys window")
+        return None
     l, t, r, b = (int(g) for g in m.groups())
     return t, b, r - l
+
+
+def inset(serial, kind):
+    got = try_inset(serial, kind)
+    if got is None:
+        raise SystemExit(f"could not read the {kind} inset from dumpsys window")
+    return got
 
 
 def find(nodes, cls, text=None):
@@ -191,6 +198,30 @@ def main():
             f"chat input is under the nav bar: bottom y={inputs[0]['bounds'][3]} >= {ntop}",
         )
     screencap(serial, out / "chat.png")
+
+    # adjustResize in the manifest does nothing once the app is edge-to-edge: the
+    # IME is an overlay inset, so the composer stays where it was and the
+    # keyboard covers it. Only KeyboardAvoidingView moves it out of the way.
+    if inputs:
+        box = inputs[0]["bounds"]
+        adb("shell", "input", "tap", str((box[0] + box[2]) // 2), str((box[1] + box[3]) // 2), serial=serial)
+        time.sleep(2)
+        adb("shell", "input", "text", "hi", serial=serial)
+        typed = wait_stable(serial, dump, timeout=30)
+        ime = try_inset(serial, "ime")
+        composer = find(typed, "EditText")
+        if not composer:
+            check(False, "", "composer vanished when the keyboard opened")
+        elif ime is None:
+            check(False, "", "the keyboard never came up, so this check proved nothing")
+        else:
+            check(
+                composer[0]["bounds"][3] <= ime[0] + 2,
+                f"with the keyboard up (ime starts y={ime[0]}) the composer is at y={composer[0]['bounds'][3]}",
+                f"the keyboard covers the composer: its bottom y={composer[0]['bounds'][3]} is under ime top y={ime[0]}",
+            )
+        screencap(serial, out / "keyboard.png")
+        adb("shell", "input", "keyevent", "4", serial=serial)
     return report(checks)
 
 

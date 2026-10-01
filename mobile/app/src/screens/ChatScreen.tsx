@@ -2,6 +2,7 @@ import React, {useState} from 'react';
 import {
   Button,
   FlatList,
+  KeyboardAvoidingView,
   StyleSheet,
   Text,
   TextInput,
@@ -56,37 +57,42 @@ export function ChatScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <FlatList
-        data={messages}
-        keyExtractor={m => m.id}
-        style={styles.list}
-        renderItem={({item}) => (
-          <View
-            style={[
-              styles.bubble,
-              item.role === 'user' ? styles.user : styles.assistant,
-            ]}>
-            <Text>{item.text}</Text>
-          </View>
-        )}
-      />
-      <View style={styles.row}>
-        <TextInput
-          style={styles.input}
-          value={input}
-          onChangeText={setInput}
-          placeholder="问 Lyco 点什么…"
-          editable={!busy}
-          onSubmitEditing={send}
+    <KeyboardAvoidingView style={styles.avoid} behavior="padding">
+      <View style={styles.container}>
+        <FlatList
+          data={messages}
+          keyExtractor={m => m.id}
+          style={styles.list}
+          renderItem={({item}) => (
+            <View
+              style={[
+                styles.bubble,
+                item.role === 'user' ? styles.user : styles.assistant,
+              ]}>
+              <Text>{item.text}</Text>
+            </View>
+          )}
         />
-        <Button title={busy ? '…' : '发'} onPress={send} disabled={busy} />
+        <View style={styles.row}>
+          <TextInput
+            style={styles.input}
+            value={input}
+            onChangeText={setInput}
+            placeholder="问 Lyco 点什么…"
+            editable={!busy}
+            onSubmitEditing={send}
+          />
+          <Button title={busy ? '…' : '发'} onPress={send} disabled={busy} />
+        </View>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
+  // The avoiding view animates its own paddingBottom to 0 when the keyboard
+  // hides, so the screen padding lives on the inner view or it disappears.
+  avoid: {flex: 1},
   container: {flex: 1, padding: 12},
   list: {flex: 1},
   bubble: {padding: 10, marginVertical: 4, borderRadius: 8, maxWidth: '85%'},

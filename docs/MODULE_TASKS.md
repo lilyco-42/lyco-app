@@ -269,7 +269,7 @@ RNW 给的是布局真相，不是 Android 皮肤真相：按钮、字体度量�
 
 ## B 段：模拟器像素真相（本机 AVD 跑 CI 出的 APK）
 
-**回答"android ok?"：现在 ok —— 但它是带着一个真 bug 被发现的。**
+**回答"android ok?"：现在 ok —— 但它是带着两条真 bug 被发现的，而且两条都是 web 预览原理上看不见的。**
 
 CI 出不了像素（上一节），所以这条路换成本机：APK 仍然由 GitHub Actions 构建（铁律 1 不动），
 本机只**运行**、不编译。机器上本来就装着 Android SDK
@@ -292,8 +292,9 @@ python scripts/device_ui_check.py <tmp>\app-debug.apk <out>
 ```
 
 `scripts/device_ui_check.py` 是**门禁**不是截图脚本：它把 uiautomator 量到的真实坐标
-和窗口管理器自己报的 system bar 区域对起来，6 条断言（tab 数量、tab 顶边 ≥ 状态栏下沿、
-点第二个 tab 真能换屏、地图屏内容、点回第一个 tab、输入框底边 ≤ 导航条上沿）。
+和窗口管理器自己报的 system bar 区域对起来，7 条断言（tab 数量、tab 顶边 ≥ 状态栏下沿、
+点第二个 tab 真能换屏、地图屏内容、点回第一个 tab、输入框底边 ≤ 导航条上沿、
+键盘弹起时 composer 底边 ≤ IME 上沿）。
 实测（1080×2400 @420dpi，density 2.625）：
 
 | 量到的东西 | 修 bug 前 | 修 bug 后 |
@@ -320,6 +321,22 @@ bottom y=2370 >= 2337`；改回来 6/6 绿。**过程中还修掉门禁自己的
 `force-stop` 之后立刻 dump，读到的是**正在死掉的旧窗口**那棵树，于是旧坐标被当成新渲染，
 pre-fix 源码上它居然报"tabs start at y=157 正常"。现在先等 `mCurrentFocus` 不再是本 app，
 再等连续两次 dump 完全一致才判 —— 才拿到上面那条正确的红。
+
+**第二条设备级缺陷：键盘一弹出来，输入框整个被埋掉。** 点输入框后 IME 占 y=1517..2400，
+而 composer 还停在 y=2197..2307，全在键盘底下 —— 真图上看就是打字打盲了（候选栏显示 "hello"，
+app 的输入行已经看不见了）。清单里 `windowSoftInputMode="adjustResize"` **本来就有**，
+但 edge-to-edge 之后 IME 变成 overlay inset，窗口不再 resize；RN 自己只负责把
+`keyboardDidShow` 发出来（`ReactRootView.checkForKeyboardEvents` 读 `Type.ime()` 的 insets），
+**不代替 app 挪布局**。修法：ChatScreen 外面包一层 `KeyboardAvoidingView behavior="padding"`。
+
+这里还有第二个坑，是加了 KAV 之后门禁**又红了一次**才暴露的：KAV 收起键盘时把自己的
+`paddingBottom` 动画到 **0**，于是 `container` 上原本的 `padding: 12` 被抹掉，
+输入框底边从 2307 变成 2337 —— 正好贴到导航条带上。所以屏幕 padding 必须放内层 View：
+现在是 `avoid:{flex:1}` + `container:{flex:1,padding:12}`。修好后键盘弹起时 composer 在
+y=1487（离键盘顶 30px，正是那 12dp），收起时回到 2307，7/7 绿。
+反向对照也做了：只把 `ChatScreen.tsx` 退回旧版，红的恰好只有键盘那条
+（`the keyboard covers the composer: its bottom y=2307 is under ime top y=1517`），
+其余 6 条照绿 —— 说明这条断言是单独扛得住的，不是搭便车。
 
 只有真跑才量到的另外几件：
 
