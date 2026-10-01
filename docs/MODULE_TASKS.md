@@ -310,8 +310,15 @@ pre-fix 源码上它居然报"tabs start at y=157 正常"。现在先等 `mCurre
 
 1. debug APK 装得上也跑得起来，但它**不含 `assets/index.android.bundle`**（`zipfile` 里连
    `assets/` 目录都没有；gradle 插件只给 non-debuggable 变体建 bundle 任务），所以本机必须连 Metro。
-   CI 的 `android` job 现在在 dispatch 时多出一个 `lycoapp-release` 产物，并断言
-   `assets/index.android.bundle` 真在里面（>100KB）—— 那才是能脱离 Metro 装的包。
+   CI 的 `android` job 在 dispatch 时多出一个 `lycoapp-release`，构建后由一步 python 断言 bundle 真在里面。
+   **已实测**：release 包里 `assets/index.android.bundle` = 1,005,956 字节（另有
+   `assets/dexopt/baseline.prof`），APK 54,125,997 字节（debug 是 122,861,213）；
+   **杀掉 Metro**（8081 端口确认无响应，node 进程要单独 kill，`TaskStop` 只杀掉外层 shell）
+   并 `adb reverse --remove-all` 之后，同一个 `device_ui_check.py` 跑 release 包仍然 6/6 绿，
+   两张图的地图块都在 y=306..777 = 472px = 179.8dp，与 debug+Metro 那轮**逐像素一致**
+   —— 所以这个包真的自带 JS，可以脱离 dev server 装。
+   （`device` job 现在还要显式 `--input run_emulator=true` 才排队，否则普通 dispatch 会留一个
+   永远等不到 runner 的 job；不带这个 input 的 dispatch 里它是 skipped。）
 2. `src/api/core.ts` 的 `DEFAULT_BASE_URL='http://127.0.0.1:8080'` 在模拟器里指的是**模拟器自己**，
    所以发一条消息必然失败：真图上气泡是 `出错了：TypeError: Network request failed`。
    用户气泡右对齐、错误气泡左对齐，这两件是看图才知道的。这条 TODO 本来就在代码里

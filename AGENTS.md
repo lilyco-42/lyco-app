@@ -47,8 +47,10 @@ python scripts/device_ui_check.py <tmp>/app-debug.apk <out>  # 6 条断言 + 两
 `device_ui_check.py` 断言的是"tab 顶边落在状态栏带以下、输入框底边落在导航条带以上、
 点 tab 真能换屏"，反向验过（把 `App.tsx` 退回旧版就红 4 条）。
 CI 的 `android` job 在 dispatch 时还会多出 `lycoapp-release`：只有 release 变体把
-`assets/index.android.bundle` 打进 APK（debug 变体连 `assets/` 都没有），
-那个包才能脱离 Metro 装；构建后有一步 python 断言 bundle 真在里面。
+`assets/index.android.bundle` 打进 APK（debug 变体连 `assets/` 都没有），构建后有一步
+python 断言 bundle 真在里面。**已实测**这个包能脱离 dev server 跑：Metro 杀掉、
+`adb reverse --remove-all` 之后装它，门禁仍 6/6 绿。所以想手动看 UI，
+`gh run download -n lycoapp-release` + 起模拟器 + 跑脚本就够了，不用起 Metro。
 改 UI 时日常看 `storybook-preview`（每次 push 都出），要 Android 像素再走上面这两条命令。
 `gradlew` 从 Windows 提交会丢执行位，workflow 里已 `chmod +x`；本地别补这个动作，
 也别在本地跑 gradle。
