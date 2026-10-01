@@ -352,6 +352,18 @@ tab 顶边 ≥ 状态栏下沿、
 | 启用按钮底色 | — | `#2196f3`，与 A 段 RNW 量到的 `rgb(33,150,243)` **一致** |
 | 禁用按钮底色 | — | `#dfdfdf`，与 A 段 RNW 量到的 `rgb(223,223,223)` **一致** |
 
+三张图直接进了仓库：`docs/screens/android/{chat,nearby,keyboard}.png`（本机那次 8/8 的
+release 包，1080×2400，共 188 KB）。装进去的那个 APK 有出处可查：CI run
+`36819966796`（sha `b62a9b3`）的 `lycoapp-release` 产物，`app-release.apk` =
+54,126,089 字节，`sha256 cdb5e2722a1cd0d0…770fea92`（刚才重新 `gh run download` 下来
+和手上这个逐字节比过，同一个包）。用 Read 打开核对到的：
+
+1. 两个 tab 并排、都在状态栏带下方；`聊天` 是灰的、`身边` 是蓝的 —— 这不是坏了，
+   `App.tsx` 把"当前这一屏"的按钮写成 `disabled`，所以灰的正是你正在看的那屏。
+2. 地图屏的占位块 + 两个按钮与 A 段 RNW 同形；文案 `搜身边 1km` 被 Material 的
+   `textAllCaps` 渲染成 `搜身边 1KM`，web 那条 lane 上是一模一样的表现。
+3. 键盘弹起时 composer 完整露在 IME 上方，输入 "hi" 看得见光标（就是修好之后的样子）。
+
 **它抓到的 bug 是 web 预览原理上看不见的**：RN 0.87 模板默认 `edgeToEdgeEnabled=true`，
 而 `App.tsx` 根节点是普通 `<View>`，没有任何 inset，于是整条 tab 栏画进状态栏底下 ——
 不只是难看，是**点不动**（那块区域的触摸归状态栏窗口）。Storybook / RNW 那条 lane

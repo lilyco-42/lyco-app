@@ -51,7 +51,8 @@ core (Python/Rust) ── rag_loop.py：router → 检索 → chat 总结 → ve
 - **Android 真像素（本机模拟器跑 CI 出的 APK）**：
   `gh run download -n lycoapp-release -D <tmp>` → 起模拟器 →
   `python scripts/device_ui_check.py <tmp>/app-release.apk <out>`（8 条断言 + 三张 PNG）。
-  release 包自带 JS，不用起 Metro。命令与实测数字见 `docs/MODULE_TASKS.md`「B 段」。
+  release 包自带 JS，不用起 Metro。命令与实测数字见 `docs/MODULE_TASKS.md`「B 段」，
+  三张实测截图已在 `docs/screens/android/`。
 
 两条 lane 各自的坑与已抓到的两个设备级 bug（tab 栏被状态栏吃掉、键盘埋掉输入框）都记在那里。
 
