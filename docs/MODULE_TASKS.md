@@ -205,19 +205,25 @@ workflow 文件里已写明**它在当前账号下不可调度、因此从未运
 | 本机挂一个 self-hosted runner | 免费，但要常驻第三方进程 + 注册 token，且吃你这台机器的资源 | 你确认后我再装 |
 
 标准 `ubuntu-latest` 确实不行（实测 `You're running a Linux VM where hardware acceleration is
-not available`），软件模拟（TCG）在 45 分钟窗口内也起不来。**但"macOS runner 也不行"这句我
-先前写错了，现在更正**：探针实测 `macos-14`（standard runner，不是 larger runner）上
-`emulator -accel-check` 输出 `accel: / 0 / Hypervisor.Framework OS X Version 14.8` 且退出码 0，
-也就是**有可用的硬件虚拟化**；而且 `system-images;android-34;google_apis;arm64-v8a`
-装得下来、AVD 建得成（action README 说 arm64 只有 API 30 之类的说法已过时）。
-所以第三次尝试那次 `Timeout waiting for emulator to boot` 更像是**镜像组合不对**
-（当时是 API 30 + arm64 + google_apis），不是 macOS 不能跑 —— 正在用一次真启动实验定论
-（`.github/workflows/emu-probe.yml`，run 36822621247）。
+not available`），软件模拟（TCG）在 45 分钟窗口内也起不来。**macOS 这条我来回错过两次，现在用
+模拟器自己的日志钉死了**：
 
-计费那条也写错了：GitHub 文档原文是 *"GitHub Actions usage is free for self-hosted runners and
+1. 先写"macOS 实测起不来"——那是从一次 `Timeout waiting for emulator to boot` **推**出来的，不合格。
+2. 探针改口：`emulator -accel-check` 在 `macos-14` 上输出 `accel: 0 / Hypervisor.Framework 14.8`
+   且退出码 0，`system-images;android-34;google_apis;arm64-v8a` 也装得下来 —— 于是我怀疑是镜像组合选错。
+3. 真启动实验（run 36822621247）给了终审：镜像装好、AVD 建好、`advancedFeatures.ini` 里
+   `HVF = on`，但 qemu 一起来就死：
+   `HVF error: HV_UNSUPPORTED` → `qemu-system-aarch64-headless: failed to initialize HVF:
+   Invalid argument` → `QEMU main loop exits abnormally with code 1`。
+
+结论：**`-accel-check` 在这类 runner 上是假阳性**（它只报框架版本，不真的建 VM），
+判据必须是 `hv_vm_create` 或一次真启动。runner 本身是 `VirtualMac2,1`（Apple M1 Virtual），
+没有嵌套虚拟化，所以 macOS standard runner 也起不来 AVD。
+GitHub 侧要模拟器像素，仍然只剩下面那三条路。
+
+计费那条更正仍然成立：GitHub 文档原文是 *"GitHub Actions usage is free for self-hosted runners and
 for public repositories that use standard GitHub-hosted runners"*，本仓库是 **public**，
-`macos-14` 是 standard runner —— 所以这条 lane 对本仓库**不产生分钟费用**，
-我原先写的"macOS 分钟按倍率计费所以只能手动触发"在这里不成立。
+所以走 standard runner 不产生分钟费用 —— 只是这条路在技术上不通，不是钱的问题。
 
 ## 界面预览（A 段：react-native-web，采用现成方案）
 

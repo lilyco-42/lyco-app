@@ -177,16 +177,21 @@ jobs:
   device:
     name: "emulator screenshots (pixel truth)"
     # NOT RUNNABLE ON THIS ACCOUNT - kept as the route for a future org move.
-    # Three attempts, three distinct failures: ubuntu-latest refused to boot an
-    # x86_64 AVD ("You're running a Linux VM where hardware acceleration is not
-    # available"), macos-14 + arch:aarch64 was rejected by the action's input
-    # vocabulary, and macos-14 + arm64-v8a never finished booting. The action's
-    # README wants exactly what is configured below: a Linux *larger* runner plus
-    # the KVM udev rule. But GitHub's docs state larger runners are "only
-    # available for organizations and enterprises using the GitHub Team or GitHub
-    # Enterprise Cloud plans", and this repo belongs to a personal account, so no
-    # payment method makes this job schedulable. Until then the pixel truth comes
-    # from scripts/device_ui_check.py against a local emulator.
+    # Measured, not guessed:
+    #   * ubuntu-latest: "You're running a Linux VM where hardware acceleration
+    #     is not available" - no /dev/kvm, so an x86_64 AVD never boots.
+    #   * macos-14 (standard, free for public repos): `emulator -accel-check`
+    #     exits 0 claiming Hypervisor.Framework, but a real boot dies at once
+    #     with "HVF error: HV_UNSUPPORTED" / "failed to initialize HVF: Invalid
+    #     argument" - the runner is itself a VM (VirtualMac2,1) with no nested
+    #     virtualisation, so -accel-check is a false positive there.
+    #   * the action's own recommendation is what is configured below: a Linux
+    #     *larger* runner plus the KVM udev rule. GitHub's docs restrict larger
+    #     runners to "organizations and enterprises using the GitHub Team or
+    #     GitHub Enterprise Cloud plans", and this repo belongs to a personal
+    #     account, so no payment method makes it schedulable.
+    # Until then the pixel truth comes from scripts/device_ui_check.py against a
+    # local emulator.
     runs-on: ubuntu-24.04-16core
     timeout-minutes: 45
     # Opt-in even for a dispatch: with no matching runner on this account the job
