@@ -49,6 +49,10 @@ Android/APK 只在 CI 构建：`.github/workflows/ci.yml`
 
 ```powershell
 # 前提：APK 由 CI 出（gh run download -n lycoapp-debug -D <tmp>），本机绝不跑 gradle
+# device job 里不依赖 KVM 的那几步可以先在标准 runner 上真跑一遍（下载产物、验 bundle、
+# 门禁脚本能起来且无设备时干净退出）：
+#   gh workflow run ci.yml --ref main -f dry_run_device=true
+# 剩下的模拟器启动本身，这台账号调度不了。
 $env:LOCALAPPDATA\Android\Sdk\emulator\emulator.exe -avd lyco-preview -no-window `
   -no-audio -no-boot-anim -no-snapshot-save -gpu swiftshader_indirect   # 起机约 80s
 cd mobile/app; npx react-native start                       # debug APK 不带 bundle，必须有 Metro

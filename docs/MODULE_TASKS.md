@@ -432,6 +432,9 @@ y=1487（离键盘顶 30px，正是那 12dp），收起时回到 2307，7/7 绿�
 1. debug APK 装得上也跑得起来，但它**不含 `assets/index.android.bundle`**（`zipfile` 里连
    `assets/` 目录都没有；gradle 插件只给 non-debuggable 变体建 bundle 任务），所以本机必须连 Metro。
    CI 的 `android` job 在 dispatch 时多出一个 `lycoapp-release`，构建后由一步 python 断言 bundle 真在里面。
+   **这一步也做过反向对照**（拿本机已有的四个 CI 产物直接跑那段 `getinfo` 判定）：两个 release 包
+   PASS（`assets/index.android.bundle` = 1,005,956 / 1,006,048 字节），两个 debug 包全部
+   `KeyError` 拒绝 —— 也就是说它真的在区分两种变体，不是永远为真。
    **已实测**（带键盘修复的那次 dispatch）：release 包里 `assets/index.android.bundle` =
    1,006,048 字节（另有 `assets/dexopt/baseline.prof`），APK 54,126,089 字节
    （debug 是 122,861,213）；**杀掉 Metro**（8081 端口确认无响应，node 进程要单独 kill，

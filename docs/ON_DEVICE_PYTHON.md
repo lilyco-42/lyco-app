@@ -38,7 +38,8 @@ cibuildwheel 交叉编译，只要把包目录塞进 assets 里就行。
 - `certifi` 的 CA 路径在只读 assets 下能否被 `ssl` 读到（否则得走安卓系统证书）。
 
 **2026-10-01 更新口径**：Android 侧第一次真的"跑起来"了 —— 但跑的是 CI 出的 RN APK，
-在 Android 36 模拟器上安装、点击、截图核对（见 `docs/MODULE_TASKS.md`「B 段：模拟器像素真相」）。
+在 Android 36 模拟器上安装、点击、截图核对（见 `docs/MODULE_TASKS.md`「B 段：模拟器像素真相」；
+那三张图本身也提交在 `docs/screens/android/`，不用开模拟器就能看）。
 上面两条**仍然未验**：那个 APK 里没有 Python，`core/` 也没有一行代码在安卓上 import 过。
 "没有 Python"不是猜的：用 `zipfile` 把两个 APK（debug 515 项 / release 515 项）的每个条目名
 都扫过 `python`/`.py`/`.pyd`/`.whl`/`chaquopy` 关键字，**零命中**；release 的 `assets/` 只有

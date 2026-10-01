@@ -277,8 +277,11 @@ jobs:
       - name: the gate script must run here and must refuse without a device
         run: |
           set -e
+          # platform-tools ships on the runner but is not on PATH by default;
+          # inside android-emulator-runner it is, so mirror that here.
+          export PATH="$ANDROID_HOME/platform-tools:$PATH"
           python3 -c "import ast; ast.parse(open('scripts/device_ui_check.py').read()); print('parses under python3')"
-          adb version | head -1
+          adb version
           set +e
           out=$(python3 scripts/device_ui_check.py apk/app-release.apk /tmp/dry 2>&1)
           rc=$?
@@ -287,3 +290,10 @@ jobs:
           test "$rc" -ne 0
           printf '%s' "$out" | grep -q "no emulator in state"
           echo "refused cleanly with no device attached, as intended"
+          set +e
+          stripped=$(PATH=/usr/bin:/bin python3 scripts/device_ui_check.py apk/app-release.apk /tmp/dry 2>&1)
+          rc2=$?
+          set -e
+          test "$rc2" -ne 0
+          printf '%s' "$stripped" | grep -q "adb is not on PATH"
+          echo "and named the real cause when adb itself was missing"

@@ -22,7 +22,13 @@ ACTIVITY = f"{APP_ID}/.MainActivity"
 
 def adb(*args, serial=None):
     cmd = ["adb"] + (["-s", serial] if serial else []) + list(args)
-    r = subprocess.run(cmd, capture_output=True, text=True)
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True)
+    except FileNotFoundError:
+        raise SystemExit(
+            "adb is not on PATH - install platform-tools; inside "
+            "ReactiveCircus/android-emulator-runner it is already there"
+        )
     if r.returncode != 0:
         raise SystemExit(f"adb {' '.join(args)} failed: {r.stderr.strip()}")
     return r.stdout.replace("\r", "")
