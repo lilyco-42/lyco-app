@@ -38,11 +38,16 @@ Android/APK 只在 CI 构建：`.github/workflows/ci.yml`
 **组织**开放，本仓库属于个人账号 —— 那个 job 是"哪天搬进 org 就能用"的现成配置，
 从未运行验证过。要看真机像素：
 
-```bash
+```powershell
 # 前提：APK 由 CI 出（gh run download -n lycoapp-debug -D <tmp>），本机绝不跑 gradle
-cd mobile/app && npx react-native start                      # debug APK 不带 bundle，必须有 Metro
+$env:LOCALAPPDATA\Android\Sdk\emulator\emulator.exe -avd lyco-preview -no-window `
+  -no-audio -no-boot-anim -no-snapshot-save -gpu swiftshader_indirect   # 起机约 80s
+cd mobile/app; npx react-native start                       # debug APK 不带 bundle，必须有 Metro
 python scripts/device_ui_check.py <tmp>/app-debug.apk <out>  # 6 条断言 + 两张 PNG
 ```
+
+AVD `lyco-preview`（android-36 / x86_64，占 ~6 GB）的建立命令在
+`docs/MODULE_TASKS.md`「B 段：模拟器像素真相」。
 
 `device_ui_check.py` 断言的是"tab 顶边落在状态栏带以下、输入框底边落在导航条带以上、
 点 tab 真能换屏"，反向验过（把 `App.tsx` 退回旧版就红 4 条）。
