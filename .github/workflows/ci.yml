@@ -220,41 +220,14 @@ jobs:
           disable-animations: true
           script: |
             set -e
-            adb install -r "$GITHUB_WORKSPACE/apk/app-release.apk"
-            adb shell am start -n com.lycoapp/.MainActivity
-            sleep 20
-            adb exec-out screencap -p > /tmp/01-chat.png
-            adb shell uiautomator dump /sdcard/ui.xml >/dev/null
-            adb pull /sdcard/ui.xml /tmp/ui-chat.xml >/dev/null
-            grep -q "问 Lyco" /tmp/ui-chat.xml || { echo "chat input never rendered"; exit 1; }
-            # The tab row is the second clickable Button in the top band.
-            eval "$(python3 - <<'PY'
-            import re, xml.etree.ElementTree as ET
-            b = [n.get('bounds') for n in ET.parse('/tmp/ui-chat.xml').iter('node')
-                 if n.get('class').endswith('Button')]
-            l, t, r, bo = (int(v) for v in re.findall(r'-?\d+', b[1]))
-            print(f'TAP_X={(l + r) // 2} TAP_Y={(t + bo) // 2}')
-            PY
-            )"
-            adb shell input tap "$TAP_X" "$TAP_Y"
-            sleep 4
-            adb shell uiautomator dump /sdcard/ui2.xml >/dev/null
-            adb pull /sdcard/ui2.xml /tmp/ui-map.xml >/dev/null
-            grep -q "地图占位" /tmp/ui-map.xml || { echo "the tab tap did not switch screens"; exit 1; }
-            adb exec-out screencap -p > /tmp/02-nearby.png
-      - name: the shots must be real and must differ
-        run: |
-          ls -la /tmp/01-chat.png /tmp/02-nearby.png
-          test $(stat -c %s /tmp/01-chat.png) -gt 20000
-          test $(stat -c %s /tmp/02-nearby.png) -gt 20000
-          if cmp -s /tmp/01-chat.png /tmp/02-nearby.png; then
-            echo "identical screenshots: the tap on 身边 did nothing"
-            exit 1
-          fi
-          echo "screenshots differ, sizes: $(stat -c %s /tmp/01-chat.png) / $(stat -c %s /tmp/02-nearby.png)"
-      - name: upload screenshots
+            # The same gate the local lane runs, so an org-era CI run checks what
+            # has actually been validated rather than an older inline copy of it.
+            python3 scripts/device_ui_check.py \
+              "$GITHUB_WORKSPACE/apk/app-release.apk" /tmp/device-ui
+      - name: upload the shots and the widget dump
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: emulator-screenshots
-          path: /tmp/0*.png
+          path: /tmp/device-ui/
           if-no-files-found: error

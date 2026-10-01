@@ -194,6 +194,10 @@ enterprises using the GitHub Team or GitHub Enterprise Cloud plans"*
 结论：`device` job 保留成"哪天仓库搬进 Team/Enterprise org 就能直接用"的现成配置
 （Linux larger runner + `Enable KVM group perms` + x86_64 AVD + 带 bundle 的 release APK），
 workflow 文件里已写明**它在当前账号下不可调度、因此从未运行验证过**。
+它原来内联了一份"点 tab + 截图"的旧逻辑，和本机那份门禁已经不一样了（门禁后来加的
+等待稳定、并排、键盘三条它都没有），所以改成直接调 `scripts/device_ui_check.py`，
+产物目录一起上传。这一步能验的只有静态部分：YAML 解析出 6 个 job、device 5 步、
+把 `script:` 抠出来 `bash -n` 通过 —— **真跑仍未验过**，缺的是一台能调度的 runner。
 真机像素改由本机模拟器出，见下一节。
 
 **要让 CI 真的出像素，只有这三条路，都要你点头：**
