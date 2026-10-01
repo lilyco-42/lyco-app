@@ -8,6 +8,12 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      run_emulator:
+        description: "Try the device job (only schedulable from a Team/Enterprise org)"
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -183,7 +189,9 @@ jobs:
     # from scripts/device_ui_check.py against a local emulator.
     runs-on: ubuntu-24.04-16core
     timeout-minutes: 45
-    if: github.event_name == 'workflow_dispatch'
+    # Opt-in even for a dispatch: with no matching runner on this account the job
+    # would just sit "Waiting for a runner" until the queue timeout.
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_emulator == 'true'
     needs: [android]
     steps:
       - uses: actions/checkout@v4
