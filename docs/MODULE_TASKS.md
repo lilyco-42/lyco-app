@@ -213,6 +213,17 @@ not available`）。TCG（软件模拟）这条我从"慢"改成了实测的"卡
 冷启动，adb 一直停在 `offline`，日志冻在 135 行，`qemu-system-x86_64-headless` 的 CPU 时间隔 45 秒
 两次采样都是 `0.4375` 秒（也就是根本没在跑），约 7 分钟零进展；同一 AVD 去掉 `-accel off` 则
 `Boot completed in 57739 ms`。所以结论限定在这台机器/这个镜像：**TCG 不是慢，是没在推进**。
+
+CI 那一侧的 TCG 我另外开了三次探针（一次性 workflow，跑完就删），**没拿到答案**，
+但拿到了三条有用的实测：`ubuntu-latest` 上 `emulator -accel-check` 退出码 **11**
+（模拟器自己报"没有硬件加速"，run 36864719920）；前两次探针"通过"了建 AVD 那一步却是假的 ——
+第一次是 zip URL 猜错（`platform-tools-linux.zip` 不存在，unzip 解到一个 HTML 错误页），
+第二次是 `grep ... | head` 把 grep 的失败吞掉了（管道的退出码来自 `head`）；第三次把断言改成
+`emulator -list-avds | grep -qx tcg` 之后立刻红了，日志显示 `avdmanager create avd` **退出 0
+但根本没建 `/home/runner/.android/avd/`**。所以"免费 Linux runner 上 TCG 能不能冷启动"这个问题
+**仍是未测**，不是"测出来不行"。就算能起来，一次 30 分钟以上的冷启动也当不了常规 lane ——
+要 CI 出像素，还是回到上面那三条路。
+
 **macOS 这条我来回错过两次，现在用
 模拟器自己的日志钉死了**：
 
