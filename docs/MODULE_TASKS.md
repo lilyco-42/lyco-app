@@ -249,6 +249,10 @@ CI 的 `preview` job 跑同一条 build，并**断言三条 story id 都在**
 边界（照写）：`react-native-safe-area-context` 没有 web 入口，`.storybook/main.ts`
 用 `enforce: 'pre'` 的 vite 插件把它别名到一个零 inset 的透传 shim，
 **只有预览 lane 用得到**，RN 应用和 jest lane 仍走真包。
+另外别在 `main.ts` 里找 `react-native → react-native-web` 那条别名 —— **它不在我们仓库里**，
+是框架自带的 `vite-plugin-rnw` 提供的（`node_modules/@storybook/react-native-web-vite/node_modules/vite-plugin-rnw/dist/index.mjs`
+里就是 `alias: { "react-native": "react-native-web" }`）。自己再写 `resolve.alias` 会被它覆盖，
+所以 shim 只能用 `enforce: 'pre'` 的插件（当时验证过：普通 alias 下运行时探针是 `shim=NO`）。
 RNW 给的是布局真相，不是 Android 皮肤真相：按钮、字体度量、滚动条仍是浏览器样式；
 真机像素由下面「B 段：模拟器像素真相」负责。
 
