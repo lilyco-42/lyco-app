@@ -5,6 +5,7 @@
 import React from 'react';
 import ReactTestRenderer, {ReactTestInstance} from 'react-test-renderer';
 import {Button, Text, TextInput} from 'react-native';
+import {SafeAreaView} from 'react-native-safe-area-context';
 import App from '../App';
 
 /**
@@ -85,4 +86,18 @@ test('switching back to 聊天 remounts the composer', () => {
   press(root, '聊天');
   expect(root.findAllByType(TextInput)).toHaveLength(1);
   expect(buttonByTitle(root, '搜身边 1km')).toBeUndefined();
+});
+
+/**
+ * RN 0.87 ships edgeToEdgeEnabled=true, so a plain View root draws its first row
+ * under the status bar. On the emulator that made both tabs un-tappable; the web
+ * preview has no status bar, so only this assertion catches it in CI.
+ */
+test('the root container insets the status bar and the navigation bar', () => {
+  const root = mount();
+  const [container] = root.findAllByType(SafeAreaView);
+  expect(container).toBeDefined();
+  expect(container.props.edges).toEqual(
+    expect.arrayContaining(['top', 'bottom']),
+  );
 });

@@ -7,7 +7,7 @@
 
 import {useState} from 'react';
 import {Button, StatusBar, StyleSheet, useColorScheme, View} from 'react-native';
-import {SafeAreaProvider} from 'react-native-safe-area-context';
+import {SafeAreaProvider, SafeAreaView} from 'react-native-safe-area-context';
 import {ChatScreen} from './src/screens/ChatScreen';
 import {MapScreen} from './src/screens/MapScreen';
 
@@ -20,7 +20,7 @@ function App() {
   return (
     <SafeAreaProvider>
       <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         <View style={styles.tabs}>
           <Button
             title="聊天"
@@ -34,7 +34,7 @@ function App() {
           />
         </View>
         {tab === 'chat' ? <ChatScreen /> : <MapScreen />}
-      </View>
+      </SafeAreaView>
     </SafeAreaProvider>
   );
 }

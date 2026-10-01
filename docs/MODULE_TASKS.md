@@ -11,7 +11,7 @@
 | services/poi | 低 | cline+me | 低 | ✅ 已交付（cline 写架子，me 补完测试，7/7 通过） |
 | services/reviews | 中 | cline | 中 | ✅ 已交付（5/5 通过，answer_fn 可注入） |
 | mobile/sensors | 中 | me | 低 | ✅ 已交付（bridge 可注入，node:test 6/6，无 RN 依赖） |
-| mobile/ui | 中 | me | 中 | ✅ 已交付（RN 0.87 脚手架 + 聊天/地图双屏 + API 桩，tsc 干净，jest 2 suites / 5 tests 且切换有真断言；**但仍没上真机**，见复核记录 3；Cline 余额耗尽） |
+| mobile/ui | 中 | me | 中 | ✅ 已交付（RN 0.87 脚手架 + 聊天/地图双屏 + API 桩，tsc 干净，jest 2 suites / 6 tests 且切换有真断言；已在 Android 36 模拟器上装跑并截图核对（见「B 段」），物理手机仍未跑；Cline 余额耗尽） |
 | plugins/dsh-lyco-chat | 中 | me | 中 | ✅ 最小交付（`lyco_ask` + `lyco_nearby_shops` 两个工具走 `python -m core.cli`，用真 `defineTool` 构造，`npm test` 13/13；**真在 Harness 里加载未验证**，本机没有 dsh 仓库检出，见 plugins/dsh-lyco-chat/README.md） |
 | mobile/inference | 高 | me | 中 | JNI/.so，真机验证跑不掉。端侧 Python 可行性已审计完 → `docs/ON_DEVICE_PYTHON.md`（唯一阻塞点是 `core/summarizer.py` 那一处 `subprocess`；建议 Chaquopy 装解释器 + 自带 llama.cpp `.so`） |
 | core/action | 高 | 后期 | 高 | 无障碍 + AutoGLM，门控，默认关闭 |
@@ -30,7 +30,7 @@
 | services/poi | ✅ 7/7 | `python services/poi/test_poi.py` | 7 条 PASS，ALL PASSED |
 | services/reviews | ✅ 5/5 | `python services/reviews/test_reviews.py` | 5 条 PASS，ALL PASSED |
 | mobile/sensors | ✅ node:test 6/6 | `node --test mobile/sensors/test_permissions.mjs` | 6 pass / 0 fail |
-| mobile/ui | ✅ tsc + jest | `npx tsc --noEmit`；`npx jest --ci` | tsc 退出码 0 无输出；jest 2 suites / 5 tests（复核时把模板那条空断言换成了真的双屏切换断言，见记录 3） |
+| mobile/ui | ✅ tsc + jest | `npx tsc --noEmit`；`npx jest --ci` | tsc 退出码 0 无输出；jest 2 suites / 6 tests（复核时把模板那条空断言换成了真的双屏切换断言，见记录 3；第 6 条是 B 段发现的 root inset，见「B 段」） |
 | plugins/dsh-lyco-chat | 本次新增 | `node --test test_plugin.mjs` | 13 pass / 0 fail（含走真 python + stub CLI 的端到端两条） |
 
 没有假声明，但六条必须说清：
@@ -167,7 +167,8 @@ stale pin；核对方法：`gh run list --branch main` 取 id，`gh run view <id
 而中间几次只改了 markdown 或测试（zip 里的时间戳/顺序不进内容哈希）。这个数只证明
 "产物真的建出来并上传了"，不要拿它当回归基线。
 
-CI 从没证明的事：APK 只构建、没安装。整个仓库目前没有任何一层跑过真机或模拟器。
+CI 从没证明的事：APK 在 CI 里只构建、不安装。安装并运行发生在**本机 Android 模拟器**上，
+见下面「B 段：模拟器像素真相」那节。
 
 ### `device` job（模拟器像素真相）三次尝试都红了，原因已定位
 
@@ -181,15 +182,19 @@ CI 从没证明的事：APK 只构建、没安装。整个仓库目前没有任�
 所以不是脚本或 JS 层的问题；本机 `react-native bundle --platform android` 也能出
 900,847 字节的 bundle，Metro 喂包没问题。
 
-**官方文档给出的正解是 larger Linux runner + 开 KVM**（action README 原话：Ubuntu larger
-runner 比 macOS 快 2–3 倍且便宜得多，并附 `Enable KVM group perms` 片段），
-但 GitHub 的 larger runner **要求账号挂上有效支付方式**，这一步不该由我替你决定。
-macOS 那条还能再试（下一步该改的是 `emulator-options` 里的 `-gpu swiftshader_indirect`
-→ Apple Silicon 上换 `-gpu metal`），但每次约 20 分钟、按 macOS 倍率计费，
-所以我把它当成一个待你拍板的选项，而不是继续猜。
+**上一轮写的"larger runner 只要挂支付方式"这句是错的，现在更正。** GitHub 文档
+"Who can use this feature?" 原文：larger runners *"only available for organizations and
+enterprises using the GitHub Team or GitHub Enterprise Cloud plans"*
+（<https://docs.github.com/en/actions/how-tos/manage-runners/larger-runners/use-larger-runners>）。
+而本仓库属于**个人账号**：`gh api repos/lilyco-42/lyco-app --jq .owner.type` → `User`。
+所以这不是钱的问题 —— 个人账号挂不挂支付方式都不在资格范围内，
+`runs-on: ubuntu-24.04-16core` 在这种账号下不会有 runner 来接
+（排队行为我没实测，实测到的只是上面这条资格限制）。
 
-当前事实仍然是：**没有任何一层看过真机/模拟器像素**。设计态像素级布局由
-`storybook-preview` 负责（每次 push 都出，已在 CI 绿）。
+结论：`device` job 保留成"哪天仓库搬进 Team/Enterprise org 就能直接用"的现成配置
+（Linux larger runner + `Enable KVM group perms` + x86_64 AVD + 带 bundle 的 release APK），
+workflow 文件里已写明**它在当前账号下不可调度、因此从未运行验证过**。
+真机像素改由本机模拟器出，见下一节。
 
 ## 界面预览（A 段：react-native-web，采用现成方案）
 
@@ -245,7 +250,81 @@ CI 的 `preview` job 跑同一条 build，并**断言三条 story id 都在**
 用 `enforce: 'pre'` 的 vite 插件把它别名到一个零 inset 的透传 shim，
 **只有预览 lane 用得到**，RN 应用和 jest lane 仍走真包。
 RNW 给的是布局真相，不是 Android 皮肤真相：按钮、字体度量、滚动条仍是浏览器样式；
-真机像素由下面的 `device` job 负责。
+真机像素由下面「B 段：模拟器像素真相」负责。
+
+## B 段：模拟器像素真相（本机 AVD 跑 CI 出的 APK）
+
+**回答"android ok?"：现在 ok —— 但它是带着一个真 bug 被发现的。**
+
+CI 出不了像素（上一节），所以这条路换成本机：APK 仍然由 GitHub Actions 构建（铁律 1 不动），
+本机只**运行**、不编译。机器上本来就装着 Android SDK
+（`%LOCALAPPDATA%\Android\Sdk`，`emulator -accel-check` → `WHPX(10.0.26200) is installed and usable`），
+新建了专用 AVD `lyco-preview`（android-36 / google_apis_playstore / x86_64 / pixel_7），
+没动用户原有的 AVD。顺带发现原有 AVD `susong35` 在 `avdmanager list avd` 里是
+"could not be loaded" 状态 —— 与本项目无关，我没碰它。
+
+命令（本机，从零到截图）：
+
+```powershell
+$SDK = "$env:LOCALAPPDATA\Android\Sdk"
+echo no | & $SDK\cmdline-tools\latest\bin\avdmanager.bat create avd -n lyco-preview `
+  -k "system-images;android-36;google_apis_playstore;x86_64" -d pixel_7
+& $SDK\emulator\emulator.exe -avd lyco-preview -no-window -no-audio -no-boot-anim `
+  -no-snapshot-save -gpu swiftshader_indirect          # WHPX 下实测约 80s 起机
+cd mobile/app; npx react-native start                  # debug APK 不带 bundle，必须有 Metro
+gh run download -n lycoapp-debug -D <tmp>              # 取 CI 产物，不在本机 gradle
+python scripts/device_ui_check.py <tmp>\app-debug.apk <out>
+```
+
+`scripts/device_ui_check.py` 是**门禁**不是截图脚本：它把 uiautomator 量到的真实坐标
+和窗口管理器自己报的 system bar 区域对起来，6 条断言（tab 数量、tab 顶边 ≥ 状态栏下沿、
+点第二个 tab 真能换屏、地图屏内容、点回第一个 tab、输入框底边 ≤ 导航条上沿）。
+实测（1080×2400 @420dpi，density 2.625）：
+
+| 量到的东西 | 修 bug 前 | 修 bug 后 |
+|-----------|----------|----------|
+| 状态栏占的带 | y=0..136 | 同 |
+| 导航条占的带 | y=2337..2400 | 同 |
+| 两个 tab Button 顶边 | **y=21**（整条在状态栏底下） | y=157 |
+| 点 tab 中心 (216,69) | 没反应（触摸被状态栏窗口吃掉） | 换屏成功 |
+| 聊天输入框底边 | **y=2370**（压进导航条带 33px） | y=2307 |
+| 地图占位块高 | — | 472px = **179.8dp**（源码写 180） |
+| 启用按钮底色 | — | `#2196f3`，与 A 段 RNW 量到的 `rgb(33,150,243)` **一致** |
+| 禁用按钮底色 | — | `#dfdfdf`，与 A 段 RNW 量到的 `rgb(223,223,223)` **一致** |
+
+**它抓到的 bug 是 web 预览原理上看不见的**：RN 0.87 模板默认 `edgeToEdgeEnabled=true`，
+而 `App.tsx` 根节点是普通 `<View>`，没有任何 inset，于是整条 tab 栏画进状态栏底下 ——
+不只是难看，是**点不动**（那块区域的触摸归状态栏窗口）。Storybook / RNW 那条 lane
+没有状态栏，A 段全绿也照不出它。修法：根容器换成 `react-native-safe-area-context` 的
+`SafeAreaView edges={['top','bottom']}`（`SafeAreaProvider` 早就包着了，只是没人用它的视图）。
+
+**这条门禁真能挡吗 —— 反向验过。** 把 `App.tsx` 退回改前版本再跑，6 条红 4 条，
+且红在正确的原因上：`tab bar is under the status bar: tabs top y=21/21 < status bar bottom
+y=136`、`tapping the second tab did not switch screens`、`chat input is under the nav bar:
+bottom y=2370 >= 2337`；改回来 6/6 绿。**过程中还修掉门禁自己的一个假绿**：第一版脚本在
+`force-stop` 之后立刻 dump，读到的是**正在死掉的旧窗口**那棵树，于是旧坐标被当成新渲染，
+pre-fix 源码上它居然报"tabs start at y=157 正常"。现在先等 `mCurrentFocus` 不再是本 app，
+再等连续两次 dump 完全一致才判 —— 才拿到上面那条正确的红。
+
+只有真跑才量到的另外几件：
+
+1. debug APK 装得上也跑得起来，但它**不含 `assets/index.android.bundle`**（`zipfile` 里连
+   `assets/` 目录都没有；gradle 插件只给 non-debuggable 变体建 bundle 任务），所以本机必须连 Metro。
+   CI 的 `android` job 现在在 dispatch 时多出一个 `lycoapp-release` 产物，并断言
+   `assets/index.android.bundle` 真在里面（>100KB）—— 那才是能脱离 Metro 装的包。
+2. `src/api/core.ts` 的 `DEFAULT_BASE_URL='http://127.0.0.1:8080'` 在模拟器里指的是**模拟器自己**，
+   所以发一条消息必然失败：真图上气泡是 `出错了：TypeError: Network request failed`。
+   用户气泡右对齐、错误气泡左对齐，这两件是看图才知道的。这条 TODO 本来就在代码里
+   （等 on-device core server），我**没有**擅自改 baseURL。
+3. 键盘弹得出来也收得回去（`input tap` 落在输入框上 → `mInputShown=true`）；
+   `哪家好` 在 0 POI 时确实 disabled，和源码判断一致。
+4. 「搜身边 1km」显示成「搜身边 1KM」：RNW 源码里就有 `textTransform:'uppercase'`，
+   两边一致，所以这不是设备差异，是文案本身要不要改（产品决定，记着不动）。
+
+**没验到的（不许顺嘴上抬）**：内嵌 Python。模拟器上跑的是 CI 那个 RN APK，
+设备里没有任何一处执行过 `core/` 的 Python；物理手机也没跑过；CI 侧仍然没有安装环节。
+`docs/ON_DEVICE_PYTHON.md` 的口径因此只从"从没看过一眼真机"改成
+"RN 外壳已在 Android 36 模拟器跑通并截图核对，Python 侧仍未上设备验证"。
 
 ## 关于 deepseek-harness 的一个坑
 

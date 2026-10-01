@@ -140,71 +140,94 @@ jobs:
           name: lycoapp-debug
           path: mobile/app/android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+      # A debug APK carries no JS bundle at all (the gradle plugin only creates
+      # the bundle task for non-debuggable variants), so installing it is useless
+      # unless Metro is reachable. Release embeds the bundle, so this is the APK
+      # to hand to a phone or an emulator with no dev server.
+      - name: assembleRelease (bundle embedded)
+        if: github.event_name == 'workflow_dispatch'
+        working-directory: mobile/app/android
+        run: ./gradlew assembleRelease --no-daemon --stacktrace
+      - name: the release apk must really carry the bundle
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          python3 - <<'PY'
+          import zipfile
+          p = "mobile/app/android/app/build/outputs/apk/release/app-release.apk"
+          names = zipfile.ZipFile(p).namelist()
+          assert "assets/index.android.bundle" in names, [n for n in names if n.startswith("assets/")] or names[:20]
+          info = zipfile.ZipFile(p).getinfo("assets/index.android.bundle")
+          print("index.android.bundle:", info.file_size, "bytes uncompressed")
+          assert info.file_size > 100_000, info.file_size
+          PY
+      - name: upload release apk
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: lycoapp-release
+          path: mobile/app/android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
 
   device:
     name: "emulator screenshots (pixel truth)"
-    # GitHub's Linux runners give this job no /dev/kvm, so an x86_64 AVD has to
-    # software-emulate and never boots inside the timeout. Apple Silicon runners
-    # run the arm64 image on real CPU emulation-free hardware.
-    runs-on: macos-14
+    # NOT RUNNABLE ON THIS ACCOUNT - kept as the route for a future org move.
+    # Three attempts, three distinct failures: ubuntu-latest refused to boot an
+    # x86_64 AVD ("You're running a Linux VM where hardware acceleration is not
+    # available"), macos-14 + arch:aarch64 was rejected by the action's input
+    # vocabulary, and macos-14 + arm64-v8a never finished booting. The action's
+    # README wants exactly what is configured below: a Linux *larger* runner plus
+    # the KVM udev rule. But GitHub's docs state larger runners are "only
+    # available for organizations and enterprises using the GitHub Team or GitHub
+    # Enterprise Cloud plans", and this repo belongs to a personal account, so no
+    # payment method makes this job schedulable. Until then the pixel truth comes
+    # from scripts/device_ui_check.py against a local emulator.
+    runs-on: ubuntu-24.04-16core
     timeout-minutes: 45
-    # Expensive lane (macOS minutes are metered at a multiplier), so it is
-    # on-demand; `preview` is the every-push design-time lane.
     if: github.event_name == 'workflow_dispatch'
     needs: [android]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: mobile/app/package-lock.json
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
-      - name: npm ci
-        working-directory: mobile/app
-        run: npm ci
-      - name: install maestro
+      - name: Enable KVM group perms
         run: |
-          curl -fsSL https://get.maestro.mobile.dev -o /tmp/maestro-install.sh
-          bash /tmp/maestro-install.sh -p "$HOME/.maestro"
-          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
       - uses: actions/download-artifact@v4
         with:
-          name: lycoapp-debug
+          # The release build embeds assets/index.android.bundle, so the emulator
+          # needs no Metro server and no node install.
+          name: lycoapp-release
           path: apk
-      - name: start metro
-        working-directory: mobile/app
-        run: |
-          nohup npx react-native start > /tmp/metro.log 2>&1 &
-          for i in $(seq 1 60); do
-            curl -sf http://127.0.0.1:8081/status >/dev/null && break
-            sleep 2
-          done
-          curl -sf http://127.0.0.1:8081/status || { tail -40 /tmp/metro.log; exit 1; }
       - name: drive the real app on an emulator
         uses: ReactiveCircus/android-emulator-runner@v2
         with:
-          # arm64-v8a system images exist only for a few API levels (the action's
-          # README names 30), and the app's minSdk is 24, so 30 is the safe pick.
-          api-level: 30
-          # The action's own vocabulary, not the SDK image folder name: it
-          # rejects aarch64 with "Value for input.arch 'aarch64' is unknown.
-          # Supported options: x86,x86_64,arm64-v8a".
-          arch: arm64-v8a
+          api-level: 34
+          arch: x86_64
           target: google_apis
           disable-animations: true
           script: |
             set -e
-            adb install -r "$GITHUB_WORKSPACE/apk/app-debug.apk"
-            adb reverse tcp:8081 tcp:8081
+            adb install -r "$GITHUB_WORKSPACE/apk/app-release.apk"
             adb shell am start -n com.lycoapp/.MainActivity
-            sleep 60
+            sleep 20
             adb exec-out screencap -p > /tmp/01-chat.png
-            maestro test "$GITHUB_WORKSPACE/.maestro/preview.yaml"
-            sleep 5
+            adb shell uiautomator dump /sdcard/ui.xml >/dev/null
+            adb pull /sdcard/ui.xml /tmp/ui-chat.xml >/dev/null
+            grep -q "问 Lyco" /tmp/ui-chat.xml || { echo "chat input never rendered"; exit 1; }
+            # The tab row is the second clickable Button in the top band.
+            eval "$(python3 - <<'PY'
+            import re, xml.etree.ElementTree as ET
+            b = [n.get('bounds') for n in ET.parse('/tmp/ui-chat.xml').iter('node')
+                 if n.get('class').endswith('Button')]
+            l, t, r, bo = (int(v) for v in re.findall(r'-?\d+', b[1]))
+            print(f'TAP_X={(l + r) // 2} TAP_Y={(t + bo) // 2}')
+            PY
+            )"
+            adb shell input tap "$TAP_X" "$TAP_Y"
+            sleep 4
+            adb shell uiautomator dump /sdcard/ui2.xml >/dev/null
+            adb pull /sdcard/ui2.xml /tmp/ui-map.xml >/dev/null
+            grep -q "地图占位" /tmp/ui-map.xml || { echo "the tab tap did not switch screens"; exit 1; }
             adb exec-out screencap -p > /tmp/02-nearby.png
       - name: the shots must be real and must differ
         run: |

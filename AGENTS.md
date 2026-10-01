@@ -31,12 +31,25 @@ cd mobile/app && npm run storybook:build   # 设计态预览（react-native-web�
 只有 `rm -rf node_modules && npx npm@10 ci` 过了才算同步（npm 11 会放过 npm 10 拒绝的树）。
 
 Android/APK 只在 CI 构建：`.github/workflows/ci.yml`
-（python → mobile → plugin → preview → android，外加按需的 device）。
-`device` job 在 **macOS arm64 runner**（macos-14）上用 API 30 / `arm64-v8a` 模拟器真装真点，产出
-`emulator-screenshots` 产物；Linux runner 拿不到 `/dev/kvm`，x86_64 AVD 软件模拟
-启动不进来，所以这条只能在 macOS 上跑。macOS 分钟按倍率计费，因此它
-**只在 `workflow_dispatch` 时跑**：`gh workflow run ci.yml`（dispatch 默认就在 main 上）。
-改 UI 时日常看 `storybook-preview`（每次 push 都出），要像素真相再手动触发 device。
+（python → mobile → plugin → preview → android，外加一个当前账号调度不了的 device）。
+
+**像素真相在本机模拟器，不在 CI。** CI 的 `device` job 要 GitHub *larger runner*
+（Linux + `/dev/kvm`），而文档写明 larger runners 只对 Team / Enterprise Cloud 的
+**组织**开放，本仓库属于个人账号 —— 那个 job 是"哪天搬进 org 就能用"的现成配置，
+从未运行验证过。要看真机像素：
+
+```bash
+# 前提：APK 由 CI 出（gh run download -n lycoapp-debug -D <tmp>），本机绝不跑 gradle
+cd mobile/app && npx react-native start                      # debug APK 不带 bundle，必须有 Metro
+python scripts/device_ui_check.py <tmp>/app-debug.apk <out>  # 6 条断言 + 两张 PNG
+```
+
+`device_ui_check.py` 断言的是"tab 顶边落在状态栏带以下、输入框底边落在导航条带以上、
+点 tab 真能换屏"，反向验过（把 `App.tsx` 退回旧版就红 4 条）。
+CI 的 `android` job 在 dispatch 时还会多出 `lycoapp-release`：只有 release 变体把
+`assets/index.android.bundle` 打进 APK（debug 变体连 `assets/` 都没有），
+那个包才能脱离 Metro 装；构建后有一步 python 断言 bundle 真在里面。
+改 UI 时日常看 `storybook-preview`（每次 push 都出），要 Android 像素再走上面这两条命令。
 `gradlew` 从 Windows 提交会丢执行位，workflow 里已 `chmod +x`；本地别补这个动作，
 也别在本地跑 gradle。
 
