@@ -52,19 +52,20 @@ Android/APK 只在 CI 构建：`.github/workflows/ci.yml`
 $env:LOCALAPPDATA\Android\Sdk\emulator\emulator.exe -avd lyco-preview -no-window `
   -no-audio -no-boot-anim -no-snapshot-save -gpu swiftshader_indirect   # 起机约 80s
 cd mobile/app; npx react-native start                       # debug APK 不带 bundle，必须有 Metro
-python scripts/device_ui_check.py <tmp>/app-debug.apk <out>  # 7 条断言 + 三张 PNG
+python scripts/device_ui_check.py <tmp>/app-debug.apk <out>  # 8 条断言 + 三张 PNG
 ```
 
 AVD `lyco-preview`（android-36 / x86_64，占 ~6 GB）的建立命令在
 `docs/MODULE_TASKS.md`「B 段：模拟器像素真相」。
 
-`device_ui_check.py` 断言的是"tab 顶边落在状态栏带以下、输入框底边落在导航条带以上、
-点 tab 真能换屏、键盘弹起时 composer 不被 IME 埋掉"，两条都反向验过
-（退回 `App.tsx` 红 4 条，退回 `ChatScreen.tsx` 只红键盘那条）。
+`device_ui_check.py` 断言的是"两个 tab 并排、tab 顶边落在状态栏带以下、输入框底边落在
+导航条带以上、点 tab 真能换屏、键盘弹起时 composer 不被 IME 埋掉"。三条单独反向验过：
+退回 `App.tsx` 红 4 条，退回 `ChatScreen.tsx` 只红键盘那条，把 dump 里第二个 tab 的
+bounds 改写成"竖着堆"则并排那条判 False（证明不是永真式）。
 CI 的 `android` job 在 dispatch 时还会多出 `lycoapp-release`：只有 release 变体把
 `assets/index.android.bundle` 打进 APK（debug 变体连 `assets/` 都没有），构建后有一步
 python 断言 bundle 真在里面。**已实测**这个包能脱离 dev server 跑：Metro 杀掉、
-`adb reverse --remove-all` 之后装它，7 条断言全绿（含键盘那条）。所以想手动看 UI，
+`adb reverse --remove-all` 之后装它，8 条断言全绿（含键盘和并排那两条）。所以想手动看 UI，
 `gh run download -n lycoapp-release` + 起模拟器 + 跑脚本就够了，不用起 Metro。
 改 UI 时日常看 `storybook-preview`（每次 push 都出），要 Android 像素再走上面这两条命令。
 `gradlew` 从 Windows 提交会丢执行位，workflow 里已 `chmod +x`；本地别补这个动作，

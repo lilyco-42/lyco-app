@@ -205,7 +205,11 @@ workflow 文件里已写明**它在当前账号下不可调度、因此从未运
 | 本机挂一个 self-hosted runner | 免费，但要常驻第三方进程 + 注册 token，且吃你这台机器的资源 | 你确认后我再装 |
 
 标准 `ubuntu-latest` 确实不行（实测 `You're running a Linux VM where hardware acceleration is
-not available`），软件模拟（TCG）在 45 分钟窗口内也起不来。**macOS 这条我来回错过两次，现在用
+not available`）。TCG（软件模拟）这条我从"慢"改成了实测的"卡住"：本机同一个 AVD 加 `-accel off`
+冷启动，adb 一直停在 `offline`，日志冻在 135 行，`qemu-system-x86_64-headless` 的 CPU 时间隔 45 秒
+两次采样都是 `0.4375` 秒（也就是根本没在跑），约 7 分钟零进展；同一 AVD 去掉 `-accel off` 则
+`Boot completed in 57739 ms`。所以结论限定在这台机器/这个镜像：**TCG 不是慢，是没在推进**。
+**macOS 这条我来回错过两次，现在用
 模拟器自己的日志钉死了**：
 
 1. 先写"macOS 实测起不来"——那是从一次 `Timeout waiting for emulator to boot` **推**出来的，不合格。
@@ -319,14 +323,16 @@ $SDK = "$env:LOCALAPPDATA\Android\Sdk"
 echo no | & $SDK\cmdline-tools\latest\bin\avdmanager.bat create avd -n lyco-preview `
   -k "system-images;android-36;google_apis_playstore;x86_64" -d pixel_7
 & $SDK\emulator\emulator.exe -avd lyco-preview -no-window -no-audio -no-boot-anim `
-  -no-snapshot-save -gpu swiftshader_indirect          # WHPX 下实测约 80s 起机
+  -no-snapshot-save -gpu swiftshader_indirect          # WHPX 冷启动实测约 80s 起机
+                                                       # 换 -gpu fast2d 那次 57.7s
 cd mobile/app; npx react-native start                  # debug APK 不带 bundle，必须有 Metro
 gh run download -n lycoapp-debug -D <tmp>              # 取 CI 产物，不在本机 gradle
 python scripts/device_ui_check.py <tmp>\app-debug.apk <out>
 ```
 
 `scripts/device_ui_check.py` 是**门禁**不是截图脚本：它把 uiautomator 量到的真实坐标
-和窗口管理器自己报的 system bar 区域对起来，7 条断言（tab 数量、tab 顶边 ≥ 状态栏下沿、
+和窗口管理器自己报的 system bar 区域对起来，8 条断言（tab 数量、**两个 tab 必须并排**、
+tab 顶边 ≥ 状态栏下沿、
 点第二个 tab 真能换屏、地图屏内容、点回第一个 tab、输入框底边 ≤ 导航条上沿、
 键盘弹起时 composer 底边 ≤ IME 上沿）。
 实测（1080×2400 @420dpi，density 2.625）：
@@ -348,7 +354,8 @@ python scripts/device_ui_check.py <tmp>\app-debug.apk <out>
 没有状态栏，A 段全绿也照不出它。修法：根容器换成 `react-native-safe-area-context` 的
 `SafeAreaView edges={['top','bottom']}`（`SafeAreaProvider` 早就包着了，只是没人用它的视图）。
 
-**这条门禁真能挡吗 —— 反向验过。** 把 `App.tsx` 退回改前版本再跑，6 条红 4 条，
+**这条门禁真能挡吗 —— 反向验过。**（下面两次反向对照跑的时候门禁还是 6 条 / 7 条，
+数字是当时的，不是现在的 8 条。）把 `App.tsx` 退回改前版本再跑，6 条红 4 条，
 且红在正确的原因上：`tab bar is under the status bar: tabs top y=21/21 < status bar bottom
 y=136`、`tapping the second tab did not switch screens`、`chat input is under the nav bar:
 bottom y=2370 >= 2337`；改回来 6/6 绿。**过程中还修掉门禁自己的一个假绿**：第一版脚本在
@@ -372,6 +379,14 @@ y=1487（离键盘顶 30px，正是那 12dp），收起时回到 2307，7/7 绿�
 （`the keyboard covers the composer: its bottom y=2307 is under ime top y=1517`），
 其余 6 条照绿 —— 说明这条断言是单独扛得住的，不是搭便车。
 
+**第 8 条：两个 tab 必须并排。** 前面所有断言只比 y，不比 x，所以手搓 HTML 预览那种
+"竖着堆两个按钮"的错误布局在设备上照样能全绿。现在要求第二个 tab 的左边在第一个 tab
+右边之外、且两者顶边差 < 5px；实测 `聊天` 右边缘 x=137 → `身边` 左边缘 x=158，
+**gap 21px**（源码 `styles.tabs` 是 `flexDirection:'row'` + `gap:8`，8dp × 2.625 = 21px，
+对得上）。这条也单独反向验过：拿真 dump 里两个按钮的 bounds，把第二个改写成"同 x、
+在第一个下面"再跑一次判定，结果是 `False`（真 dump 是 `True`）—— 也就是说它不是永真式。
+跑的是 CI 那个自带 bundle 的 release 包，8081 端口确认无人监听，**8/8 全绿**。
+
 只有真跑才量到的另外几件：
 
 1. debug APK 装得上也跑得起来，但它**不含 `assets/index.android.bundle`**（`zipfile` 里连
@@ -381,7 +396,8 @@ y=1487（离键盘顶 30px，正是那 12dp），收起时回到 2307，7/7 绿�
    1,006,048 字节（另有 `assets/dexopt/baseline.prof`），APK 54,126,089 字节
    （debug 是 122,861,213）；**杀掉 Metro**（8081 端口确认无响应，node 进程要单独 kill，
    `TaskStop` 只杀掉外层 shell）并 `adb reverse --remove-all` 之后，同一个
-   `device_ui_check.py` 跑这个 release 包 **7/7 全绿**，键盘弹起时 composer 在 y=1487。
+   `device_ui_check.py` 跑这个 release 包 **7/7 全绿**（那是 7 条的时候；补到 8 条后
+   同一个包、同样杀掉 Metro 再跑一遍是 8/8），键盘弹起时 composer 在 y=1487。
    三轮渲染（debug+Metro、release 脱 Metro 修键盘前、release 脱 Metro 修键盘后）的地图块
    都在 **y=306..777 = 472px = 179.8dp**，图片尺寸都是 1080×2400 —— 逐像素对齐，
    所以"这个包真的自带 JS、脱离 dev server 也是同一张脸"是量出来的不是推的。

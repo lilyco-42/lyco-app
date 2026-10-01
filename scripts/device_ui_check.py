@@ -162,6 +162,14 @@ def main():
         return report(checks)
 
     (l0, t0, r0, b0), (l1, t1, r1, b1) = tabs[0]["bounds"], tabs[1]["bounds"]
+    # styles.tabs is flexDirection:'row' with gap:8 - on the 420dpi device that gap
+    # is 21px. Without this, a stack (the bug the hand-written HTML preview had)
+    # would still pass every other check.
+    check(
+        l1 > r0 and abs(t0 - t1) < 5,
+        f"tabs sit side by side ({r0} -> {l1}, gap {l1 - r0}px)",
+        f"tabs are not in a row: first ends x={r0}, second starts x={l1}, tops {t0}/{t1}",
+    )
     check(
         t0 >= sbottom and t1 >= sbottom,
         f"both tabs start at y={t0}, below the status bar band (ends y={sbottom})",
