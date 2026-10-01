@@ -43,6 +43,18 @@ core (Python/Rust) ── rag_loop.py：router → 检索 → chat 总结 → ve
 
 见 `docs/PERMISSIONS.md`。原则：侧载优先（SMS/通话记录类权限上架会被拒）。
 
+## 怎么看界面（两条 lane，都不用等真机）
+
+- **设计态（浏览器，react-native-web）**：`cd mobile/app && npm run storybook`
+  → http://localhost:6006 ，三条 story 是 `App Root / ChatTab`、`Screens / Chat`、
+  `Screens / Nearby`；CI 每次 push 也构建整站并传成 `storybook-preview` 产物。
+- **Android 真像素（本机模拟器跑 CI 出的 APK）**：
+  `gh run download -n lycoapp-release -D <tmp>` → 起模拟器 →
+  `python scripts/device_ui_check.py <tmp>/app-release.apk <out>`（7 条断言 + 三张 PNG）。
+  release 包自带 JS，不用起 Metro。命令与实测数字见 `docs/MODULE_TASKS.md`「B 段」。
+
+两条 lane 各自的坑与已抓到的两个设备级 bug（tab 栏被状态栏吃掉、键盘埋掉输入框）都记在那里。
+
 ## 复用资产
 
 见 `core/README.md`。模型（`lyco42/*-0.6b` GGUF）、`rag_loop.py`、lyco-ip 角色资产。
