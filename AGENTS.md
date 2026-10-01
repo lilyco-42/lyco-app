@@ -37,7 +37,8 @@ CI 侧由 workflow 里的 `pip install httpx` 负责。
 只有 `rm -rf node_modules && npx npm@10 ci` 过了才算同步（npm 11 会放过 npm 10 拒绝的树）。
 
 Android/APK 只在 CI 构建：`.github/workflows/ci.yml`
-（python → mobile → plugin → preview → android，外加一个当前账号调度不了的 device）。
+（python → mobile → plugin → preview → android，外加两个 dispatch-only 的：device
+当前账号调度不了、device-dry 是它不依赖 KVM 的那几步）。
 
 **像素真相在本机模拟器，不在 CI。** CI 的 `device` job 要 GitHub *larger runner*
 （Linux + `/dev/kvm`），而文档写明 larger runners 只对 Team / Enterprise Cloud 的

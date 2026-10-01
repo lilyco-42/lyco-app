@@ -196,7 +196,8 @@ enterprises using the GitHub Team or GitHub Enterprise Cloud plans"*
 workflow 文件里已写明**它在当前账号下不可调度、因此从未运行验证过**。
 它原来内联了一份"点 tab + 截图"的旧逻辑，和本机那份门禁已经不一样了（门禁后来加的
 等待稳定、并排、键盘三条它都没有），所以改成直接调 `scripts/device_ui_check.py`，
-产物目录一起上传。这一步能验的只有静态部分：YAML 解析出 6 个 job、device 5 步、
+产物目录一起上传。当时能验的只有静态部分：YAML 解析（那时 6 个 job，现在 7 个，多出来的是
+下面那个 dispatch-only 预检）、device 5 步、
 把 `script:` 抠出来 `bash -n` 通过 —— **真跑仍未验过**，缺的是一台能调度的 runner。
 真机像素改由本机模拟器出，见下一节。
 
@@ -207,6 +208,11 @@ workflow 文件里已写明**它在当前账号下不可调度、因此从未运
 | 仓库搬进 org 并升 Team 计划（按人月计费） | 唯一"官方"解，`device` job 现成可用 | 你建 org + 挂卡 + transfer |
 | 第三方带安卓模拟器的 CI（Codemagic / Cirrus RUNS-On 等） | 另开账号、另一套配额与日志 | 你注册并授权 |
 | 本机挂一个 self-hosted runner | 免费，但要常驻第三方进程 + 注册 token，且吃你这台机器的资源 | 你确认后我再装 |
+
+第三方那条路要先做一次探针再写 job：在候选 runner 上跑 `ls -l /dev/kvm` + `emulator -accel-check`
+（本次踩过的教训是 `-accel-check` 退出 0 只代表"它以为能用"，macOS 上就是这么骗过我一次）。
+GitLab 托管 runner 的官方文档只列了 class 与 vCPU/内存，**对 KVM 既不承诺也不否认**，
+所以不能当成现成方案写进这张表。
 
 标准 `ubuntu-latest` 确实不行（实测 `You're running a Linux VM where hardware acceleration is
 not available`）。TCG（软件模拟）这条我从"慢"改成了实测的"卡住"：本机同一个 AVD 加 `-accel off`
