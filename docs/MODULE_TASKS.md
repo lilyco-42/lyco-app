@@ -198,7 +198,17 @@ workflow 文件里已写明**它在当前账号下不可调度、因此从未运
 等待稳定、并排、键盘三条它都没有），所以改成直接调 `scripts/device_ui_check.py`，
 产物目录一起上传。当时能验的只有静态部分：YAML 解析（那时 6 个 job，现在 7 个，多出来的是
 下面那个 dispatch-only 预检）、device 5 步、
-把 `script:` 抠出来 `bash -n` 通过 —— **真跑仍未验过**，缺的是一台能调度的 runner。
+把 `script:` 抠出来 `bash -n` 通过。**2026-10-01 补：不依赖 KVM 的那几步已经在标准
+Linux runner 上真跑绿了**（`device-dry`，dispatch 用 `-f dry_run_device=true` 开，
+run `36869511232`）：同一次 run 的 `lycoapp-release` 下载下来确实落在
+`apk/app-release.apk`（54,126,089 字节，和我本机跑 8/8 用的是同一个大小），
+`assets/index.android.bundle` = 1,006,048 字节在 Linux 上用 `zipfile` 再验一遍，
+门禁脚本 `python3` 起得来、无设备时按设计退出并说 `no emulator in state 'device'`。
+顺带抓到两个真 bug：runner 上 platform-tools 存在但**不在 PATH**（`adb` 是
+`/usr/local/lib/android/sdk/platform-tools/adb`，emulator-runner 里才会自动带上），
+以及门禁在 `adb` 缺失时只丢一个 `FileNotFoundError` traceback —— 现在它会直接说
+"adb is not on PATH"，预检里也把这条当成第二个断言跑了一遍。
+**仍然未验的只剩模拟器启动本身**，缺的是一台能调度的 runner。
 真机像素改由本机模拟器出，见下一节。
 
 **要让 CI 真的出像素，只有这三条路，都要你点头：**

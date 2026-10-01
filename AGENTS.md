@@ -42,8 +42,9 @@ Android/APK 只在 CI 构建：`.github/workflows/ci.yml`
 
 **像素真相在本机模拟器，不在 CI。** CI 的 `device` job 要 GitHub *larger runner*
 （Linux + `/dev/kvm`），而文档写明 larger runners 只对 Team / Enterprise Cloud 的
-**组织**开放，本仓库属于个人账号 —— 那个 job 是"哪天搬进 org 就能用"的现成配置，
-从未运行验证过。别再去试 standard runner：**Linux** 没有 `/dev/kvm`；**macOS**
+**组织**开放，本仓库属于个人账号 —— 那个 job 是"哪天搬进 org 就能用"的现成配置。
+它**不依赖 KVM 的那几步已经在标准 Linux runner 上跑绿**（`device-dry`，见
+`docs/MODULE_TASKS.md`「B 段」），模拟器启动本身仍未验过。别再去试 standard runner：**Linux** 没有 `/dev/kvm`；**macOS**
 上 `emulator -accel-check` 会退出 0 假装可用，真启动却是
 `HVF error: HV_UNSUPPORTED`（runner 自己就是 `VirtualMac2,1` 虚拟机，没有嵌套虚拟化）。
 要看真机像素：
