@@ -239,9 +239,12 @@ CI 的 `preview` job 跑同一条 build，并**断言三条 story id 都在**
 `storybook-preview`。第一次 CI 绿是 run 36752926806；把该 run 的产物下回来解包核过：
 `index.json` 里正是那三条 id，`assets/*.js` 里能搜到 `地图占位`、`问 Lyco 点什么`、
 `搜身边` 和 `react-native-web`，说明 Linux 上构建出来的确实是这两屏。
+这条断言本身也做过变异测试：把 `index.json` 里的 `screens--nearby` 删掉，
+原样跑 job 里那段 node 代码，**退出码 1**（先撞在 `expected >=3 stories`），
+所以它不是摆设。
 
 本机实测（chrome headless 出图 + `getBoundingClientRect` / `getComputedStyle` 量 DOM，
-量的是 `app-root--chat-tab` 与 `screens--nearby` 两条 story）：
+三条 story 都量过：`app-root--chat-tab`、`screens--chat`、`screens--nearby`）：
 
 | 量到的东西 | 真渲染的值 |
 |-----------|-----------|
