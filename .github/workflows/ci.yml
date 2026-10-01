@@ -14,6 +14,11 @@ on:
         type: boolean
         required: false
         default: false
+      dry_run_device:
+        description: "Run the device job's non-emulator steps on a standard runner"
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -231,3 +236,52 @@ jobs:
           name: emulator-screenshots
           path: /tmp/device-ui/
           if-no-files-found: error
+
+  device-dry:
+    name: "device job preflight (no emulator)"
+    # The device job cannot be scheduled on this account (see the comment above
+    # it), but everything in it except the KVM boot can. Running those parts on
+    # a standard runner is what makes "the job is ready to use" a measured claim
+    # instead of an assertion about untested YAML.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run_device == 'true'
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: fetch the release APK the device job would install
+        run: |
+          set -e
+          RID=$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=lycoapp-release&per_page=1" \
+            --jq '.artifacts[0].workflow_run.id')
+          test -n "$RID"
+          echo "latest lycoapp-release belongs to run $RID"
+          gh run download "$RID" -n lycoapp-release -D apk
+          test -f apk/app-release.apk
+          ls -l apk
+
+      - name: the bundle must really be inside it
+        run: |
+          python3 - <<'PY'
+          import zipfile
+          info = zipfile.ZipFile('apk/app-release.apk').getinfo('assets/index.android.bundle')
+          print('bundle bytes:', info.file_size)
+          assert info.file_size > 100_000, 'the release APK lost its bundle'
+          PY
+
+      - name: the gate script must run here and must refuse without a device
+        run: |
+          set -e
+          python3 -c "import ast; ast.parse(open('scripts/device_ui_check.py').read()); print('parses under python3')"
+          adb version | head -1
+          set +e
+          out=$(python3 scripts/device_ui_check.py apk/app-release.apk /tmp/dry 2>&1)
+          rc=$?
+          set -e
+          printf '%s\n' "$out"
+          test "$rc" -ne 0
+          printf '%s' "$out" | grep -q "no emulator in state"
+          echo "refused cleanly with no device attached, as intended"
