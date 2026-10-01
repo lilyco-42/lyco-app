@@ -258,7 +258,10 @@ CI 的 `preview` job 跑同一条 build，并**断言三条 story id 都在**
 所以它不是摆设。
 
 本机实测（chrome headless 出图 + `getBoundingClientRect` / `getComputedStyle` 量 DOM，
-三条 story 都量过：`app-root--chat-tab`、`screens--chat`、`screens--nearby`）：
+三条 story 都量过：`app-root--chat-tab`、`screens--chat`、`screens--nearby`）。
+复现方法：`npm run storybook:build` 之后把 `storybook-static/` 用任意静态服务器起起来，
+直接打开 `http://127.0.0.1:<port>/iframe.html?id=screens--nearby&viewMode=story`
+（用 iframe 视图而不是 manager 视图，量到的才是组件本身，不含 Storybook 自己的外壳）。
 
 | 量到的东西 | 真渲染的值 |
 |-----------|-----------|
@@ -267,6 +270,13 @@ CI 的 `preview` job 跑同一条 build，并**断言三条 story id 都在**
 | 禁用 tab「聊天」 | `<button disabled=true>` bg=`rgb(223,223,223)`，文字层 `rgb(161,161,161)`（外层写的是 `rgba(16,16,16,.3)`，合成后是 #a1a1a1） |
 | 聊天输入框 | `<input>` 本体 h=**40** w=328（borderTop 0.8px、radius 8、paddingBottom 10），composer 行 h=48 w=366，屏幕容器 h=844 + padding 12 |
 | 两屏内容 | 底边都在 390×844 框内（overflow −1px） |
+
+**在 `aa4a9fb` 上又复测了一遍**（另一个浏览器上下文，同一份 `storybook-static`）：地图块
+仍是 366×**180** / `rgb(229,231,235)` / radius 8；`聊天` 仍是 `disabled` 且 `rgb(223,223,223)`、
+`身边` `rgb(33,150,243)`，两个 tab **并排**（x=25 w=44 与 x=77，CSS gap 8px，顶边同为 y=25 ——
+设备那条 21px 就是同一个 8 乘上 density 2.625）。唯一对不上的是输入框：这次读到 **h=41、
+borderTop 1px**，上次 headless 出图读到的是 h=40、0.8px —— 同一个元素在两种 DPR 下的
+亚像素取整，所以"输入框存在且约 40 高"是稳的，**个位数高度不是**，别拿它当回归基线。
 
 （这一行原来写的是"外层盒 h=46"，那个数**是错的**：A/B 重测（把 `ChatScreen.tsx` 退回加
 `KeyboardAvoidingView` 之前重建一次 preview）显示新旧两版都是 input 40 / 行 48 / 容器 844，

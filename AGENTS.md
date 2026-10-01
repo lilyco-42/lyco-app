@@ -68,6 +68,8 @@ python 断言 bundle 真在里面。**已实测**这个包能脱离 dev server �
 `adb reverse --remove-all` 之后装它，8 条断言全绿（含键盘和并排那两条）。所以想手动看 UI，
 `gh run download -n lycoapp-release` + 起模拟器 + 跑脚本就够了，不用起 Metro。
 改 UI 时日常看 `storybook-preview`（每次 push 都出），要 Android 像素再走上面这两条命令。
+上一次 8/8 的三张图已经提交在 `docs/screens/android/`，所用 APK 的 CI run id 和 sha256
+记在 `docs/MODULE_TASKS.md`「B 段」，不必为了"看看长什么样"再开模拟器。
 `gradlew` 从 Windows 提交会丢执行位，workflow 里已 `chmod +x`；本地别补这个动作，
 也别在本地跑 gradle。
 
