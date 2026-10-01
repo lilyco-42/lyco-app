@@ -61,7 +61,7 @@ AVD `lyco-preview`（android-36 / x86_64，占 ~6 GB）的建立命令在
 CI 的 `android` job 在 dispatch 时还会多出 `lycoapp-release`：只有 release 变体把
 `assets/index.android.bundle` 打进 APK（debug 变体连 `assets/` 都没有），构建后有一步
 python 断言 bundle 真在里面。**已实测**这个包能脱离 dev server 跑：Metro 杀掉、
-`adb reverse --remove-all` 之后装它，门禁全绿。所以想手动看 UI，
+`adb reverse --remove-all` 之后装它，7 条断言全绿（含键盘那条）。所以想手动看 UI，
 `gh run download -n lycoapp-release` + 起模拟器 + 跑脚本就够了，不用起 Metro。
 改 UI 时日常看 `storybook-preview`（每次 push 都出），要 Android 像素再走上面这两条命令。
 `gradlew` 从 Windows 提交会丢执行位，workflow 里已 `chmod +x`；本地别补这个动作，

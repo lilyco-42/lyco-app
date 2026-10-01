@@ -241,7 +241,16 @@ CI 的 `preview` job 跑同一条 build，并**断言三条 story id 都在**
 
 （这一行原来写的是"外层盒 h=46"，那个数**是错的**：A/B 重测（把 `ChatScreen.tsx` 退回加
 `KeyboardAvoidingView` 之前重建一次 preview）显示新旧两版都是 input 40 / 行 48 / 容器 844，
-加 KAV 只多了一个 div（37→38），**没有任何几何变化**。）
+加 KAV 只多了一个 div（37→38），**没有任何几何变化**）。
+量错的过程本身也记一笔：第一次"旧版测量"读的其实是浏览器里**已经加载着的新版页面**
+（只 evaluate 没重新 navigate），数值和新版一模一样才露馅 —— 和设备门禁那个
+"force-stop 后读到旧窗口"是同一类坑。
+
+试过但**没有采纳**的做法：在 CI 里用 headless Chrome 截图 + 数像素颜色来把这些几何变成门禁。
+量下来发现阈值全靠不住（居中文案把整列颜色打断、0.8px 边框基本是抗锯齿、
+一行最多只有 324 个 #e5e7eb 像素而不是 366），而且 Windows 与 Linux CI 字体渲染不同，
+放进每次 push 的 lane 就是造一个 flake 源。CI 侧的"检查"仍然是
+`preview` job 的三条 story id 断言 + 产物上传，几何数值靠本机浏览器量。
 
 注意 goal 里写的"禁用态 `#cdcdcd`"是**手搓 HTML 那版**的说法（我照抄了 RN 默认的
 `color: '#cdcdcd'` 猜测），真渲染下 RNW 走的是 Material 配色 `#dfdfdf`/`#a1a1a1`。
@@ -347,11 +356,12 @@ y=1487（离键盘顶 30px，正是那 12dp），收起时回到 2307，7/7 绿�
 1. debug APK 装得上也跑得起来，但它**不含 `assets/index.android.bundle`**（`zipfile` 里连
    `assets/` 目录都没有；gradle 插件只给 non-debuggable 变体建 bundle 任务），所以本机必须连 Metro。
    CI 的 `android` job 在 dispatch 时多出一个 `lycoapp-release`，构建后由一步 python 断言 bundle 真在里面。
-   **已实测**：release 包里 `assets/index.android.bundle` = 1,005,956 字节（另有
-   `assets/dexopt/baseline.prof`），APK 54,125,997 字节（debug 是 122,861,213）；
-   **杀掉 Metro**（8081 端口确认无响应，node 进程要单独 kill，`TaskStop` 只杀掉外层 shell）
-   并 `adb reverse --remove-all` 之后，同一个 `device_ui_check.py` 跑 release 包仍然 6/6 绿，
-   两张图的地图块都在 y=306..777 = 472px = 179.8dp，与 debug+Metro 那轮**逐像素一致**
+   **已实测**（带键盘修复的那次 dispatch）：release 包里 `assets/index.android.bundle` =
+   1,006,048 字节（另有 `assets/dexopt/baseline.prof`），APK 54,126,089 字节
+   （debug 是 122,861,213）；**杀掉 Metro**（8081 端口确认无响应，node 进程要单独 kill，
+   `TaskStop` 只杀掉外层 shell）并 `adb reverse --remove-all` 之后，同一个
+   `device_ui_check.py` 跑这个 release 包 **7/7 全绿**，键盘弹起时 composer 在 y=1487，
+   地图块仍在 y=306..777 = 472px = 179.8dp，与 debug+Metro 那轮逐像素一致
    —— 所以这个包真的自带 JS，可以脱离 dev server 装。
    （`device` job 现在还要显式 `--input run_emulator=true` 才排队，否则普通 dispatch 会留一个
    永远等不到 runner 的 job；不带这个 input 的 dispatch 里它是 skipped。）
