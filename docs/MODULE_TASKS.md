@@ -372,9 +372,10 @@ y=1487（离键盘顶 30px，正是那 12dp），收起时回到 2307，7/7 绿�
    1,006,048 字节（另有 `assets/dexopt/baseline.prof`），APK 54,126,089 字节
    （debug 是 122,861,213）；**杀掉 Metro**（8081 端口确认无响应，node 进程要单独 kill，
    `TaskStop` 只杀掉外层 shell）并 `adb reverse --remove-all` 之后，同一个
-   `device_ui_check.py` 跑这个 release 包 **7/7 全绿**，键盘弹起时 composer 在 y=1487，
-   地图块仍在 y=306..777 = 472px = 179.8dp，与 debug+Metro 那轮逐像素一致
-   —— 所以这个包真的自带 JS，可以脱离 dev server 装。
+   `device_ui_check.py` 跑这个 release 包 **7/7 全绿**，键盘弹起时 composer 在 y=1487。
+   三轮渲染（debug+Metro、release 脱 Metro 修键盘前、release 脱 Metro 修键盘后）的地图块
+   都在 **y=306..777 = 472px = 179.8dp**，图片尺寸都是 1080×2400 —— 逐像素对齐，
+   所以"这个包真的自带 JS、脱离 dev server 也是同一张脸"是量出来的不是推的。
    （`device` job 现在还要显式 `--input run_emulator=true` 才排队，否则普通 dispatch 会留一个
    永远等不到 runner 的 job；不带这个 input 的 dispatch 里它是 skipped。）
 2. `src/api/core.ts` 的 `DEFAULT_BASE_URL='http://127.0.0.1:8080'` 在模拟器里指的是**模拟器自己**，
