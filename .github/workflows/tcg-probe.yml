@@ -1,0 +1,92 @@
+name: tcg probe (throwaway)
+
+# Question this exists to answer with a measurement instead of an inference:
+# can a free GitHub-hosted Linux runner produce Android pixels at all without
+# /dev/kvm, i.e. booting the AVD under qemu TCG (-accel off)?
+# Dispatch only. Delete once the answer is recorded in docs/MODULE_TASKS.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+      apk_run:
+        description: run id to download lycoapp-release from
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  tcg:
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install the SDK pieces
+        run: |
+          set -e
+          sudo mkdir -p /opt/android
+          sudo chown "$USER" /opt/android
+          cd /opt/android
+          for t in platform-tools cmdline-tools emulator; do
+            if [ "$t" = "cmdline-tools" ]; then
+              curl -sSLo ct.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+              unzip -q ct.zip && mv cmdline-tools latest && mkdir -p cmdline-tools && mv latest cmdline-tools/
+            else
+              curl -sSLo "$t.zip" "https://dl.google.com/android/repository/$t-linux.zip"
+              unzip -q "$t.zip"
+            fi
+          done
+          export ANDROID_HOME=/opt/android
+          yes | cmdline-tools/latest/bin/sdkmanager --sdk_root=/opt/android \
+            "platforms;android-34" "system-images;android-34;google_apis;x86_64" >/dev/null
+          echo "ANDROID_HOME=/opt/android" >> "$GITHUB_ENV"
+          echo "/opt/android/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "/opt/android/emulator" >> "$GITHUB_PATH"
+          echo "/opt/android/platform-tools" >> "$GITHUB_PATH"
+
+      - name: build an AVD
+        run: |
+          set -e
+          echo no | avdmanager create avd -n tcg -k "system-images;android-34;google_apis;x86_64" -d pixel_7
+          grep -E 'hw.cpu.arch|image' ~/.android/avd/tcg.avd/config.ini | head
+
+      - name: confirm the runner really has no kvm
+        run: |
+          ls -l /dev/kvm || echo "NO /dev/kvm"
+          emulator -accel-check || echo "accel-check exit=$?"
+
+      - name: boot under TCG and time it
+        run: |
+          set -e
+          emulator -avd tcg -no-window -no-audio -no-boot-anim -no-snapshot \
+            -accel off -gpu swiftshader_indirect -verbose > /tmp/emu-tcg.log 2>&1 &
+          EMPID=$!
+          echo "emulator pid=$EMPID"
+          : > /tmp/cpu-samples.txt
+          for i in $(seq 1 60); do
+            sleep 30
+            st=$(adb get-state 2>/dev/null | tr -d '\r' || echo none)
+            done=$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || echo '')
+            cpu=$(ps -o times= -C qemu-system-x86_64 2>/dev/null | awk '{s+=$1} END {print s+0}')
+            lines=$(wc -l < /tmp/emu-tcg.log)
+            echo "t=$((i*30))s state=$st boot=$done qemu_cpu=${cpu}s log_lines=$lines" | tee -a /tmp/cpu-samples.txt
+            if [ "$done" = "1" ]; then echo "BOOTED under TCG after $((i*30))s"; exit 0; fi
+            if ! kill -0 "$EMPID" 2>/dev/null; then echo "emulator process gone at $((i*30))s"; break; fi
+          done
+          echo "NOT BOOTED under TCG within the window"
+          tail -40 /tmp/emu-tcg.log
+          exit 1
+
+      - name: keep the evidence either way
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tcg-probe
+          path: /tmp/emu-tcg.log
+          if-no-files-found: warn
+
+      - name: keep the timing samples too
+        if: always()
+        run: cat /tmp/cpu-samples.txt
