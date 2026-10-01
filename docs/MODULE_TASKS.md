@@ -236,8 +236,12 @@ CI 的 `preview` job 跑同一条 build，并**断言三条 story id 都在**
 | 地图占位块 | h=**180** w=366 bg=`rgb(229,231,235)` radius=8 |
 | 启用 tab「身边」 | `<button disabled=false>` bg=`rgb(33,150,243)`，白字，h=36 w=44，radius=2 |
 | 禁用 tab「聊天」 | `<button disabled=true>` bg=`rgb(223,223,223)`，文字层 `rgb(161,161,161)`（外层写的是 `rgba(16,16,16,.3)`，合成后是 #a1a1a1） |
-| 聊天输入框 | 外层盒 h=46，`<input>` 本体 h=40，`placeholder="问 Lyco 点什么…"` |
+| 聊天输入框 | `<input>` 本体 h=**40** w=328（borderTop 0.8px、radius 8、paddingBottom 10），composer 行 h=48 w=366，屏幕容器 h=844 + padding 12 |
 | 两屏内容 | 底边都在 390×844 框内（overflow −1px） |
+
+（这一行原来写的是"外层盒 h=46"，那个数**是错的**：A/B 重测（把 `ChatScreen.tsx` 退回加
+`KeyboardAvoidingView` 之前重建一次 preview）显示新旧两版都是 input 40 / 行 48 / 容器 844，
+加 KAV 只多了一个 div（37→38），**没有任何几何变化**。）
 
 注意 goal 里写的"禁用态 `#cdcdcd`"是**手搓 HTML 那版**的说法（我照抄了 RN 默认的
 `color: '#cdcdcd'` 猜测），真渲染下 RNW 走的是 Material 配色 `#dfdfdf`/`#a1a1a1`。
