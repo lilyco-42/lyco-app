@@ -208,10 +208,19 @@ run `36869511232`）：同一次 run 的 `lycoapp-release` 下载下来确实落
 `/usr/local/lib/android/sdk/platform-tools/adb`，emulator-runner 里才会自动带上），
 以及门禁在 `adb` 缺失时只丢一个 `FileNotFoundError` traceback —— 现在它会直接说
 "adb is not on PATH"，预检里也把这条当成第二个断言跑了一遍。
-**仍然未验的只剩模拟器启动本身**，缺的是一台能调度的 runner。
-真机像素改由本机模拟器出，见下一节。
+**当时以为只剩"模拟器启动本身"这一件事没验。** 2026-10-02 把它验了，结论和之前的推测相反：
+`ubuntu-latest` 上 `-accel off`（qemu TCG）**能**冷启动 AVD —— 探针 run `36992265905` 里
+`sys.boot_completed` 在 **720 秒**变成 1，而且 qemu 的 CPU 时间一路贴着墙上时间走
+（t=570s 时 605s、t=720s 时 769s），也就是说它一直在推进，不是卡住。之前那条
+"TCG 不推进"是**这台 Windows 主机**的实测，不能搬到 Linux 上 —— 我当时把它写成了
+"限定在这台机器"，但没进一步去测 Linux，这是漏掉的一步。
+探针最后一步（装完 APK 之后）红在 `uiautomator dump` 上：`ERROR: null root node returned by
+UiTestAutomationBridge` —— 单核软件渲染下 25 秒根本画不出第一帧，而门禁的
+`wait_stable` 早就有"等两帧一致再判"的逻辑，只是 `ui_dump` 之前把 dump 失败当成致命错误。
+现在它把"还没画出来"当重试信号，所有等待窗口按 `LYCO_DEVICE_SLOWDOWN` 缩放（本机 1，
+CI 的 TCG 设备 8），`device` job 也改成在 `ubuntu-latest` 上自己起模拟器跑这套门禁。
 
-**要让 CI 真的出像素，只有这三条路，都要你点头：**
+**当时以为要让 CI 真的出像素只剩这三条路，都要你点头：**
 
 | 路 | 代价 | 谁动手 |
 |----|------|--------|
@@ -229,11 +238,17 @@ GitLab 托管 runner 的官方文档只列了 class 与 vCPU/内存，**对 KVM 
 是实测出来的：**没有 KVM 的 GitHub 托管 runner 起不了 Android 模拟器**；其余都是取舍，
 由你定。顺带记一句免得下次再拿 self-hosted runner 来提：那条其实和铁律冲突 ——
 runner 就挂在你这台机器上，等于 gradle 在本机执行，正是"本机不编译 Android 产物"要挡的事。
-因此 CI 侧像素这条**保持未落地**，本机 lane（`scripts/device_ui_check.py` +
-`docs/screens/android/`）是目前唯一的像素来源。
+因此 CI 侧像素这条**当时保持未落地**，本机 lane（`scripts/device_ui_check.py` +
+`docs/screens/android/`）是那段时间唯一的像素来源。
+**但这条否决后来没有挡住路**：第四条不需要花钱、不开账号、也不在你机器上编译的路其实存在 ——
+就是上面测到的"免费 Linux runner + `-accel off`"，慢（起机 12 分钟）但能跑，
+所以 `device` job 已经按它重写了。教训记一条：把三条路列成菜单请人拍板之前，
+先把"唯一还没测的那一步"测掉，否则菜单本身可能是错的。
 
-标准 `ubuntu-latest` 确实不行（实测 `You're running a Linux VM where hardware acceleration is
-not available`）。TCG（软件模拟）这条我从"慢"改成了实测的"卡住"：本机同一个 AVD 加 `-accel off`
+标准 `ubuntu-latest` 上**要硬件加速就不行**（实测 `You're running a Linux VM where hardware
+acceleration is not available`，`emulator -accel-check` 退出码 11）—— 但"不行"仅限带加速那条路，
+关掉加速的 TCG 可以，见上面那段。TCG（软件模拟）在**本机 Windows** 上我从"慢"改成了实测的
+"卡住"：本机同一个 AVD 加 `-accel off`
 冷启动，adb 一直停在 `offline`，日志冻在 135 行，`qemu-system-x86_64-headless` 的 CPU 时间隔 45 秒
 两次采样都是 `0.4375` 秒（也就是根本没在跑），约 7 分钟零进展；同一 AVD 去掉 `-accel off` 则
 `Boot completed in 57739 ms`。所以结论限定在这台机器/这个镜像：**TCG 不是慢，是没在推进**。
@@ -244,9 +259,11 @@ CI 那一侧的 TCG 我另外开了三次探针（一次性 workflow，跑完就
 第一次是 zip URL 猜错（`platform-tools-linux.zip` 不存在，unzip 解到一个 HTML 错误页），
 第二次是 `grep ... | head` 把 grep 的失败吞掉了（管道的退出码来自 `head`）；第三次把断言改成
 `emulator -list-avds | grep -qx tcg` 之后立刻红了，日志显示 `avdmanager create avd` **退出 0
-但根本没建 `/home/runner/.android/avd/`**。所以"免费 Linux runner 上 TCG 能不能冷启动"这个问题
-**仍是未测**，不是"测出来不行"。就算能起来，一次 30 分钟以上的冷启动也当不了常规 lane ——
-要 CI 出像素，还是回到上面那三条路。
+但根本没建 `/home/runner/.android/avd/`**。所以那三次之后，"免费 Linux runner 上 TCG 能不能
+冷启动"这个问题**仍是未测**（不是"测出来不行"）。第四次（run `36992265905`）用
+`--force` + 建完立刻验证 AVD 存在，才真正走到启动那一步，答案是**能，720 秒** —— 见本节开头。
+就算能起来，一次 12 分钟的冷启动也当不了每次 push 都跑的常规 lane，
+所以 `device` job 仍然是 dispatch 手动开的；要 CI 每次 push 都出像素，还是回到上面那三条路。
 
 **macOS 这条我来回错过两次，现在用
 模拟器自己的日志钉死了**：
@@ -282,6 +299,10 @@ RN ≥ 0.74.5 ✓、react ^19 ✓、vite ^7 ✓。GitHub 上先例充分（22k�
 cd mobile/app && npm run storybook:build   # -> storybook-static/（已 gitignore）
 cd mobile/app && npm run storybook         # 本机 http://localhost:6006 边改边看
 ```
+
+（原话里的 `npm run storybook build` 在这份仓库对应 **`npm run storybook:build`**：
+`storybook` 那个 script 是 dev server，`npm run storybook build` 只会把 `build` 当成
+位置参数喂给 dev server，不会产出静态站。）
 
 CI 的 `preview` job 跑同一条 build，并**断言三条 story id 都在**
 （`app-root--chat-tab` / `screens--chat` / `screens--nearby`），产物整站上传成

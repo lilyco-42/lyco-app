@@ -37,19 +37,23 @@ CI 侧由 workflow 里的 `pip install httpx` 负责。
 只有 `rm -rf node_modules && npx npm@10 ci` 过了才算同步（npm 11 会放过 npm 10 拒绝的树）。
 
 Android/APK 只在 CI 构建：`.github/workflows/ci.yml`
-（python → mobile → plugin → preview → android，外加两个 dispatch-only 的：device
-当前账号调度不了、device-dry 是它不依赖 KVM 的那几步）。
+（python → mobile → plugin → preview → android，外加两个 dispatch-only 的：device 要
+`-f run_emulator=true` 才排队、device-dry 是它不依赖模拟器启动的那几步的预检）。
 
-**像素真相在本机模拟器，不在 CI。** CI 的 `device` job 要 GitHub *larger runner*
-（Linux + `/dev/kvm`），而文档写明 larger runners 只对 Team / Enterprise Cloud 的
-**组织**开放，本仓库属于个人账号 —— 那个 job 是"哪天搬进 org 就能用"的现成配置。
-它**不依赖 KVM 的那几步已经在标准 Linux runner 上跑绿**（`device-dry`，见
-`docs/MODULE_TASKS.md`「B 段」），模拟器启动本身仍未验过。**2026-10-02：搬 org / 第三方 CI /
-本机 self-hosted runner / 就停在本机 lane 四个选项一起被否决，这条决定不做**（self-hosted
-那条本来也和"本机不编译"冲突）。别再去试 standard runner：**Linux** 没有 `/dev/kvm`；**macOS**
-上 `emulator -accel-check` 会退出 0 假装可用，真启动却是
+**像素真相有两条 lane：本机模拟器（快）和 CI 模拟器（慢，dispatch 手动开）。**
+CI 的 `device` job 原本要 GitHub *larger runner*（Linux + `/dev/kvm`），而 larger runners
+只对 Team / Enterprise Cloud 的**组织**开放，本仓库属于个人账号 —— 那条路确实走不通。
+但 2026-10-02 实测到免费 `ubuntu-latest` 上**关掉硬件加速也能起 AVD**：`-accel off` 冷启动
+720 秒到 `sys.boot_completed=1`，qemu CPU 时间一路贴着墙上时间走（是在推进，不是卡住）。
+所以 job 已经改成 `runs-on: ubuntu-latest` + 自己起模拟器 + 跑同一份
+`scripts/device_ui_check.py`（等待窗口按 `LYCO_DEVICE_SLOWDOWN=8` 缩放）。
+只有 dispatch 且 `-f run_emulator=true` 才排队 —— 一次 12 分钟起机，不适合每次 push 都跑。
+`ReactiveCircus/android-emulator-runner` 在 Linux 上没有 KVM 会直接拒绝启动，所以这一步是
+自己 `emulator` 起的；这是与原计划唯一的偏离，job 注释里写明了原因。
+别再去试**带加速**的 standard runner：Linux 没有 `/dev/kvm`（`emulator -accel-check` 退出 11）；
+**macOS** 上 `emulator -accel-check` 会退出 0 假装可用，真启动却是
 `HVF error: HV_UNSUPPORTED`（runner 自己就是 `VirtualMac2,1` 虚拟机，没有嵌套虚拟化）。
-要看真机像素：
+本机要快速看真机像素：
 
 ```powershell
 # 前提：APK 由 CI 出（gh run download -n lycoapp-debug -D <tmp>），本机绝不跑 gradle
