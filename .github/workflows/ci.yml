@@ -210,12 +210,46 @@ jobs:
           } >> "$GITHUB_PATH"
 
       - name: build the AVD and prove it exists
+        # avdmanager exits 0 on this runner without creating anything, so the
+        # AVD is verified and, if missing, written by hand - the same fallback
+        # the throwaway probe needed before it ever reached a boot.
         run: |
           set -e
           avdmanager create avd --force -n lyco \
             -k "system-images;android-34;google_apis;x86_64" -d pixel_7 2>&1 | tail -5
+          if ! emulator -list-avds | grep -qx lyco; then
+            echo "avdmanager did not create it; writing the AVD by hand"
+            find "$HOME/.android" -maxdepth 3 2>/dev/null | head -20
+            AVD_DIR="$HOME/.android/avd/lyco.avd"
+            mkdir -p "$AVD_DIR"
+            printf 'avd.ini.encoding=UTF-8\npath=%s\npath.rel=avd/lyco.avd\ntarget=android-34\n' \
+              "$AVD_DIR" > "$HOME/.android/avd/lyco.ini"
+            cat > "$AVD_DIR/config.ini" <<CFG
+          AvdId=lyco
+          PlayStore.enabled=false
+          abi.type=x86_64
+          hw.arch=x86_64
+          hw.cpu.arch=x86_64
+          hw.device.manufacturer=Google
+          hw.device.name=pixel_7
+          hw.gpu.enabled=yes
+          hw.gpu.mode=swiftshader_indirect
+          hw.ramSize=2048
+          hw.sdCard=yes
+          disk.dataPartition.size=6G
+          image.sysdir.1=system-images/android-34/google_apis/x86_64/
+          tag.display=Google APIs
+          tag.id=google_apis
+          target.id=android-34
+          vm.heapSize=256
+          CFG
+          fi
           emulator -list-avds
           emulator -list-avds | grep -qx lyco
+          test -f "$HOME/.android/avd/lyco.avd/config.ini"
+          echo "--- runner acceleration reality ---"
+          ls -l /dev/kvm || echo "NO /dev/kvm"
+          emulator -accel-check || echo "accel-check exit=$?"
 
       - name: boot it without acceleration
         run: |
