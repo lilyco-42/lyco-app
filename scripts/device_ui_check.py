@@ -127,20 +127,48 @@ def wait_stable(serial, local, timeout=120, gap=3):
     )
 
 
+INSET_NAMES = {
+    "statusBars": ("statusBars", "ITYPE_STATUS_BAR"),
+    "navigationBars": ("navigationBars", "ITYPE_NAVIGATION_BAR"),
+    "ime": ("ime", "ITYPE_IME"),
+}
+FRAME_PATTERNS = (
+    r"frame=\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]",
+    r"mFrame=Rect\((-?\d+),\s*(-?\d+)\s*-\s*(-?\d+),\s*(-?\d+)\)",
+)
+
+
 def try_inset(serial, kind):
-    """The frame the system window occupies, straight from the window manager."""
+    """The frame the system window occupies, straight from the window manager.
+    The line format is not stable across releases - API 36 prints
+    `type=statusBars frame=[0,0][1080,136]`, older ones print
+    `mType=ITYPE_STATUS_BAR` / `mFrame=Rect(...)` - so accept each shape."""
     out = adb("shell", "dumpsys", "window", serial=serial)
-    m = re.search(rf"type={kind} frame=\[(\d+),(\d+)\]\[(\d+),(\d+)\]", out)
-    if not m:
-        return None
-    l, t, r, b = (int(g) for g in m.groups())
-    return t, b, r - l
+    for line in out.splitlines():
+        for name in INSET_NAMES.get(kind, (kind,)):
+            if name not in line:
+                continue
+            for pat in FRAME_PATTERNS:
+                m = re.search(pat, line)
+                if m:
+                    l, t, r, b = (int(g) for g in m.groups())
+                    return t, b, r - l
+    return None
 
 
 def inset(serial, kind):
     got = try_inset(serial, kind)
     if got is None:
-        raise SystemExit(f"could not read the {kind} inset from dumpsys window")
+        out = adb("shell", "dumpsys", "window", serial=serial)
+        clues = [
+            line.strip()[:160]
+            for line in out.splitlines()
+            if "InsetsSource" in line or "ITYPE_" in line
+        ][:6]
+        raise SystemExit(
+            f"could not read the {kind} inset from dumpsys window; "
+            f"what it did report:\n  " + "\n  ".join(clues or ["<no inset lines at all>"])
+        )
     return got
 
 
