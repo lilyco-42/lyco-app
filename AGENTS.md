@@ -44,7 +44,9 @@ Android/APK 只在 CI 构建：`.github/workflows/ci.yml`
 （Linux + `/dev/kvm`），而文档写明 larger runners 只对 Team / Enterprise Cloud 的
 **组织**开放，本仓库属于个人账号 —— 那个 job 是"哪天搬进 org 就能用"的现成配置。
 它**不依赖 KVM 的那几步已经在标准 Linux runner 上跑绿**（`device-dry`，见
-`docs/MODULE_TASKS.md`「B 段」），模拟器启动本身仍未验过。别再去试 standard runner：**Linux** 没有 `/dev/kvm`；**macOS**
+`docs/MODULE_TASKS.md`「B 段」），模拟器启动本身仍未验过。**2026-10-02：搬 org / 第三方 CI /
+本机 self-hosted runner / 就停在本机 lane 四个选项一起被否决，这条决定不做**（self-hosted
+那条本来也和"本机不编译"冲突）。别再去试 standard runner：**Linux** 没有 `/dev/kvm`；**macOS**
 上 `emulator -accel-check` 会退出 0 假装可用，真启动却是
 `HVF error: HV_UNSUPPORTED`（runner 自己就是 `VirtualMac2,1` 虚拟机，没有嵌套虚拟化）。
 要看真机像素：

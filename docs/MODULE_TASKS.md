@@ -224,6 +224,14 @@ run `36869511232`）：同一次 run 的 `lycoapp-release` 下载下来确实落
 GitLab 托管 runner 的官方文档只列了 class 与 vCPU/内存，**对 KVM 既不承诺也不否认**，
 所以不能当成现成方案写进这张表。
 
+**2026-10-02：这四条（三条花钱/开账号/挂常驻进程的路，加上"就停在本机 lane"）一起被否决。**
+所以这件事当前的状态是**决定不做**，不是"我没做到"。技术上唯一确定的边界只有一条，而且
+是实测出来的：**没有 KVM 的 GitHub 托管 runner 起不了 Android 模拟器**；其余都是取舍，
+由你定。顺带记一句免得下次再拿 self-hosted runner 来提：那条其实和铁律冲突 ——
+runner 就挂在你这台机器上，等于 gradle 在本机执行，正是"本机不编译 Android 产物"要挡的事。
+因此 CI 侧像素这条**保持未落地**，本机 lane（`scripts/device_ui_check.py` +
+`docs/screens/android/`）是目前唯一的像素来源。
+
 标准 `ubuntu-latest` 确实不行（实测 `You're running a Linux VM where hardware acceleration is
 not available`）。TCG（软件模拟）这条我从"慢"改成了实测的"卡住"：本机同一个 AVD 加 `-accel off`
 冷启动，adb 一直停在 `offline`，日志冻在 135 行，`qemu-system-x86_64-headless` 的 CPU 时间隔 45 秒
