@@ -156,20 +156,27 @@ def try_inset(serial, kind):
     return None
 
 
-def inset(serial, kind):
-    got = try_inset(serial, kind)
-    if got is None:
-        out = adb("shell", "dumpsys", "window", serial=serial)
-        clues = [
-            line.strip()[:160]
-            for line in out.splitlines()
-            if "InsetsSource" in line or "ITYPE_" in line
-        ][:6]
-        raise SystemExit(
-            f"could not read the {kind} inset from dumpsys window; "
-            f"what it did report:\n  " + "\n  ".join(clues or ["<no inset lines at all>"])
-        )
-    return got
+def inset(serial, kind, timeout=120):
+    """Wait for it. On a software-rendered boot, sys.boot_completed flips while
+    SystemUI is still coming up, so the status-bar provider can legitimately be
+    absent from the dump for minutes."""
+    deadline = time.time() + timeout * SLOWDOWN
+    while time.time() < deadline:
+        got = try_inset(serial, kind)
+        if got is not None:
+            return got
+        time.sleep(max(5, int(5 * SLOWDOWN)))
+    out = adb("shell", "dumpsys", "window", serial=serial)
+    clues = [
+        line.strip()[:160]
+        for line in out.splitlines()
+        if "InsetsSource" in line or "ITYPE_" in line
+    ][:6]
+    raise SystemExit(
+        f"could not read the {kind} inset from dumpsys window within "
+        f"{int(timeout * SLOWDOWN)}s; what it did report:\n  "
+        + "\n  ".join(clues or ["<no inset lines at all>"])
+    )
 
 
 def find(nodes, cls, text=None):

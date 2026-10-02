@@ -287,12 +287,17 @@ jobs:
           path: /tmp/device-ui/
           if-no-files-found: error
 
+      - name: keep the window-manager state when it fails
+        if: failure()
+        run: adb shell dumpsys window > /tmp/dumpsys-window.txt 2>&1 || true
       - name: keep the emulator log when it fails
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: emulator-log
-          path: /tmp/emu.log
+          path: |
+            /tmp/emu.log
+            /tmp/dumpsys-window.txt
           if-no-files-found: warn
 
   device-dry:
