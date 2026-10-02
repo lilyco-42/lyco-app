@@ -181,54 +181,70 @@ jobs:
 
   device:
     name: "emulator screenshots (pixel truth)"
-    # NOT RUNNABLE ON THIS ACCOUNT - kept as the route for a future org move.
-    # Measured, not guessed:
-    #   * ubuntu-latest: "You're running a Linux VM where hardware acceleration
-    #     is not available" - no /dev/kvm, so an x86_64 AVD never boots.
-    #   * macos-14 (standard, free for public repos): `emulator -accel-check`
-    #     exits 0 claiming Hypervisor.Framework, but a real boot dies at once
-    #     with "HVF error: HV_UNSUPPORTED" / "failed to initialize HVF: Invalid
-    #     argument" - the runner is itself a VM (VirtualMac2,1) with no nested
-    #     virtualisation, so -accel-check is a false positive there.
-    #   * the action's own recommendation is what is configured below: a Linux
-    #     *larger* runner plus the KVM udev rule. GitHub's docs restrict larger
-    #     runners to "organizations and enterprises using the GitHub Team or
-    #     GitHub Enterprise Cloud plans", and this repo belongs to a personal
-    #     account, so no payment method makes it schedulable.
-    # Until then the pixel truth comes from scripts/device_ui_check.py against a
-    # local emulator.
-    runs-on: ubuntu-24.04-16core
-    timeout-minutes: 45
-    # Opt-in even for a dispatch: with no matching runner on this account the job
-    # would just sit "Waiting for a runner" until the queue timeout.
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_emulator == 'true'
+    # Measured on ubuntu-latest, 2026-10-02: an AVD cold-boots under qemu TCG with
+    # no /dev/kvm in 720s, and qemu CPU time tracked wall time the whole way - it
+    # is slow, not stalled. So a free hosted runner can produce Android pixels.
+    # ReactiveCircus/android-emulator-runner refuses to start without KVM on Linux,
+    # which is the only reason this job boots the emulator itself instead of using
+    # the action the original plan named.
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
     needs: [android]
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_emulator == 'true'
     steps:
       - uses: actions/checkout@v4
-      - name: Enable KVM group perms
+
+      - name: install the SDK pieces
         run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-      - uses: actions/download-artifact@v4
+          set -e
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$SDKM" ] || SDKM="$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | head -1)"
+          yes | "$SDKM" --sdk_root="$ANDROID_HOME" \
+            platform-tools emulator "platforms;android-34" \
+            "system-images;android-34;google_apis;x86_64" > /tmp/sdk.log 2>&1 \
+            || { tail -30 /tmp/sdk.log; exit 1; }
+          {
+            echo "$ANDROID_HOME/emulator"
+            echo "$ANDROID_HOME/platform-tools"
+            echo "$(dirname "$SDKM")"
+          } >> "$GITHUB_PATH"
+
+      - name: build the AVD and prove it exists
+        run: |
+          set -e
+          avdmanager create avd --force -n lyco \
+            -k "system-images;android-34;google_apis;x86_64" -d pixel_7 2>&1 | tail -5
+          emulator -list-avds
+          emulator -list-avds | grep -qx lyco
+
+      - name: boot it without acceleration
+        run: |
+          set -e
+          emulator -avd lyco -no-window -no-audio -no-boot-anim -no-snapshot \
+            -accel off -gpu swiftshader_indirect > /tmp/emu.log 2>&1 &
+          for i in $(seq 1 60); do
+            sleep 30
+            done=$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')
+            if [ "$done" = "1" ]; then echo "BOOTED under TCG after $((i*30))s"; exit 0; fi
+          done
+          echo "not booted within 1800s"
+          tail -30 /tmp/emu.log
+          exit 1
+
+      - name: fetch the release APK (bundle embedded, so no Metro needed)
+        uses: actions/download-artifact@v4
         with:
-          # The release build embeds assets/index.android.bundle, so the emulator
-          # needs no Metro server and no node install.
           name: lycoapp-release
           path: apk
-      - name: drive the real app on an emulator
-        uses: ReactiveCircus/android-emulator-runner@v2
-        with:
-          api-level: 34
-          arch: x86_64
-          target: google_apis
-          disable-animations: true
-          script: |
-            set -e
-            # The same gate the local lane runs, so an org-era CI run checks what
-            # has actually been validated rather than an older inline copy of it.
-            python3 scripts/device_ui_check.py \
-              "$GITHUB_WORKSPACE/apk/app-release.apk" /tmp/device-ui
+
+      - name: drive both screens and assert the layout
+        env:
+          LYCO_DEVICE_SLOWDOWN: '8'
+        run: |
+          set -e
+          python3 scripts/device_ui_check.py \
+            "$GITHUB_WORKSPACE/apk/app-release.apk" /tmp/device-ui
+
       - name: upload the shots and the widget dump
         if: always()
         uses: actions/upload-artifact@v4
@@ -236,6 +252,14 @@ jobs:
           name: emulator-screenshots
           path: /tmp/device-ui/
           if-no-files-found: error
+
+      - name: keep the emulator log when it fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: emulator-log
+          path: /tmp/emu.log
+          if-no-files-found: warn
 
   device-dry:
     name: "device job preflight (no emulator)"

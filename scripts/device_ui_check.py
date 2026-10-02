@@ -9,6 +9,7 @@ Usage: python scripts/device_ui_check.py <path-to-apk> [out-dir]
 Requires: adb + a booted emulator, and Metro serving mobile/app for a debug APK.
 """
 
+import os
 import re
 import subprocess
 import sys
@@ -18,6 +19,14 @@ from pathlib import Path
 
 APP_ID = "com.lycoapp"
 ACTIVITY = f"{APP_ID}/.MainActivity"
+ADB_MISSING = (
+    "adb is not on PATH - install platform-tools; inside "
+    "ReactiveCircus/android-emulator-runner it is already there"
+)
+# A software-rendered (TCG) device is roughly an order of magnitude slower than
+# a local accelerated one, so each lane scales the same settle windows instead
+# of carrying a second copy of them.
+SLOWDOWN = float(os.environ.get("LYCO_DEVICE_SLOWDOWN", "1"))
 
 
 def adb(*args, serial=None):
@@ -25,13 +34,19 @@ def adb(*args, serial=None):
     try:
         r = subprocess.run(cmd, capture_output=True, text=True)
     except FileNotFoundError:
-        raise SystemExit(
-            "adb is not on PATH - install platform-tools; inside "
-            "ReactiveCircus/android-emulator-runner it is already there"
-        )
+        raise SystemExit(ADB_MISSING)
     if r.returncode != 0:
         raise SystemExit(f"adb {' '.join(args)} failed: {r.stderr.strip()}")
     return r.stdout.replace("\r", "")
+
+
+def adb_rc(*args, serial=None):
+    """Return code only, for calls where non-zero is an expected retry signal."""
+    cmd = ["adb"] + (["-s", serial] if serial else []) + list(args)
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True).returncode
+    except FileNotFoundError:
+        raise SystemExit(ADB_MISSING)
 
 
 def pick_device():
@@ -51,8 +66,17 @@ def wait_booted(serial, timeout=180):
 
 
 def ui_dump(serial, local):
-    adb("shell", "uiautomator", "dump", "/sdcard/lyco-ui.xml", serial=serial)
-    adb("pull", "/sdcard/lyco-ui.xml", str(local), serial=serial)
+    """None means 'not drawable yet', which on a slow device is normal for a
+    while: a dump taken before the app has rendered returns no root node and
+    exits non-zero. Callers retry; they must not treat it as a layout failure."""
+    if adb_rc("shell", "uiautomator", "dump", "/sdcard/lyco-ui.xml", serial=serial) != 0:
+        return None
+    if adb_rc("pull", "/sdcard/lyco-ui.xml", str(local), serial=serial) != 0:
+        return None
+    try:
+        tree = ET.parse(local)
+    except ET.ParseError:
+        return None
     return [
         {
             "cls": n.get("class").rsplit(".", 1)[-1],
@@ -60,7 +84,7 @@ def ui_dump(serial, local):
             "bounds": tuple(int(v) for v in re.findall(r"-?\d+", n.get("bounds") or "")),
             "enabled": n.get("enabled") == "true",
         }
-        for n in ET.parse(local).iter("node")
+        for n in tree.iter("node")
     ]
 
 
@@ -73,7 +97,7 @@ def focused(serial):
 def wait_gone(serial, timeout=20):
     """The dying window still answers uiautomator, so its stale tree would be
     read back as if it were the render we just asked for."""
-    deadline = time.time() + timeout
+    deadline = time.time() + timeout * SLOWDOWN
     while time.time() < deadline:
         if APP_ID not in focused(serial):
             return
@@ -83,19 +107,23 @@ def wait_gone(serial, timeout=20):
 
 def wait_stable(serial, local, timeout=120, gap=3):
     """Cold start re-bundles from Metro, and a half-drawn tree must not be judged."""
-    deadline = time.time() + timeout
+    deadline = time.time() + timeout * SLOWDOWN
     previous = None
     while time.time() < deadline:
         nodes = ui_dump(serial, local)
+        if nodes is None:
+            previous = None
+            time.sleep(gap * SLOWDOWN)
+            continue
         signature = [(n["cls"], n["text"], n["bounds"]) for n in nodes]
         widgets = [n for n in nodes if n["cls"] in ("Button", "EditText")]
         if widgets and signature == previous:
             return nodes
         previous = signature
-        time.sleep(gap)
+        time.sleep(gap * SLOWDOWN)
     raise SystemExit(
-        f"the tree never settled with real widgets within {timeout}s - "
-        "is Metro running for mobile/app?"
+        f"the tree never settled with real widgets within {int(timeout * SLOWDOWN)}s - "
+        "is the app installed and is Metro running for mobile/app (debug APK)?"
     )
 
 
@@ -219,7 +247,7 @@ def main():
     if inputs:
         box = inputs[0]["bounds"]
         adb("shell", "input", "tap", str((box[0] + box[2]) // 2), str((box[1] + box[3]) // 2), serial=serial)
-        time.sleep(2)
+        time.sleep(max(2, int(2 * SLOWDOWN)))
         adb("shell", "input", "text", "hi", serial=serial)
         typed = wait_stable(serial, dump, timeout=30)
         ime = try_inset(serial, "ime")
