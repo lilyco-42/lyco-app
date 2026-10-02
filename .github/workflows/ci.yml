@@ -213,6 +213,9 @@ jobs:
         # avdmanager exits 0 on this runner without creating anything, so the
         # AVD is verified and, if missing, written by hand - the same fallback
         # the throwaway probe needed before it ever reached a boot.
+        # The lcd keys are not optional: without them the hand-written AVD boots
+        # at a 320px-wide default display, which reports a 320-wide status bar
+        # inset and no navigationBars source at all.
         run: |
           set -e
           avdmanager create avd --force -n lyco \
@@ -232,6 +235,10 @@ jobs:
           hw.cpu.arch=x86_64
           hw.device.manufacturer=Google
           hw.device.name=pixel_7
+          hw.lcd.width=1080
+          hw.lcd.height=2400
+          hw.lcd.density=420
+          hw.keyboard=yes
           hw.gpu.enabled=yes
           hw.gpu.mode=swiftshader_indirect
           hw.ramSize=2048
