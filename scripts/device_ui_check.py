@@ -179,6 +179,17 @@ def inset(serial, kind, timeout=120):
     )
 
 
+def inset_or_none(serial, kind, timeout=120):
+    """Like inset(), but returns None if this device simply has no such band."""
+    deadline = time.time() + timeout * SLOWDOWN
+    while time.time() < deadline:
+        got = try_inset(serial, kind)
+        if got is not None:
+            return got
+        time.sleep(max(5, int(5 * SLOWDOWN)))
+    return None
+
+
 def find(nodes, cls, text=None):
     return [n for n in nodes if n["cls"] == cls and (text is None or text in n["text"])]
 
@@ -204,14 +215,19 @@ def main():
     serial = pick_device()
     wait_booted(serial)
     stop, sbottom, _ = inset(serial, "statusBars")
-    ntop, nbottom, _ = inset(serial, "navigationBars")
+    nav = inset_or_none(serial, "navigationBars")
     sw, sh = (int(v) for v in re.findall(r"\d+", adb("shell", "wm", "size", serial=serial))[-2:])
-    print(f"device={serial} screen={sw}x{sh} statusBar=[{stop},{sbottom}] navBar=[{ntop},{nbottom}]")
+    ntop, nbottom = (nav[0], nav[1]) if nav else (None, None)
+    print(f"device={serial} screen={sw}x{sh} statusBar=[{stop},{sbottom}] "
+          f"navBar={[ntop, nbottom] if nav else '<none on this device>'}")
 
     checks = []
 
     def check(cond, ok_msg, bad_msg):
         checks.append(("ok" if cond else "FAIL", ok_msg if cond else bad_msg))
+
+    def note(msg):
+        checks.append(("n/a", msg))
 
     adb("install", "-r", str(apk), serial=serial)
     # A debug APK carries no JS bundle, so Metro must already be serving this app.
@@ -269,11 +285,14 @@ def main():
         "the first tab did not return to chat",
     )
     if inputs:
-        check(
-            inputs[0]["bounds"][3] <= ntop,
-            f"chat input bottom y={inputs[0]['bounds'][3]} clears the nav bar band (starts y={ntop})",
-            f"chat input is under the nav bar: bottom y={inputs[0]['bounds'][3]} >= {ntop}",
-        )
+        if ntop is None:
+            note("this device reports no navigation bar, so there is no bottom band to clear")
+        else:
+            check(
+                inputs[0]["bounds"][3] <= ntop,
+                f"chat input bottom y={inputs[0]['bounds'][3]} clears the nav bar band (starts y={ntop})",
+                f"chat input is under the nav bar: bottom y={inputs[0]['bounds'][3]} >= {ntop}",
+            )
     screencap(serial, out / "chat.png")
 
     # adjustResize in the manifest does nothing once the app is edge-to-edge: the
@@ -306,7 +325,9 @@ def report(checks):
     for kind, msg in checks:
         print(f"  [{kind:4}] {msg}")
     bad = [c for c in checks if c[0] == "FAIL"]
-    print(f"{len(checks) - len(bad)}/{len(checks)} checks passed")
+    skipped = [c for c in checks if c[0] == "n/a"]
+    ran = len(checks) - len(skipped)
+    print(f"{ran - len(bad)}/{ran} checks passed ({len(skipped)} not applicable to this device)")
     return 1 if bad else 0
 
 
