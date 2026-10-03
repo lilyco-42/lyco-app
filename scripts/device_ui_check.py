@@ -79,6 +79,9 @@ def ui_dump(serial, local):
         return None
     return [
         {
+            # package is what tells the app's own tree from a system window that
+            # happens to be on top of it - see wait_stable().
+            "pkg": n.get("package") or "",
             "cls": n.get("class").rsplit(".", 1)[-1],
             "text": (n.get("text") or "").strip(),
             "bounds": tuple(int(v) for v in re.findall(r"-?\d+", n.get("bounds") or "")),
@@ -89,9 +92,12 @@ def ui_dump(serial, local):
 
 
 def focused(serial):
+    """The window the system is actually handing touches to. For an app window
+    that reads `com.lycoapp/.MainActivity`; for a system dialog there is no
+    activity to name, so keep the whole label - it is the diagnosis."""
     out = adb("shell", "dumpsys", "window", serial=serial)
-    m = re.search(r"mCurrentFocus=Window\{[^}]*\s(\S+)/", out)
-    return m.group(1) if m else ""
+    m = re.search(r"mCurrentFocus=Window\{[^}]*?u0\s+([^}]*)\}", out)
+    return m.group(1).strip() if m else ""
 
 
 def wait_gone(serial, timeout=20):
@@ -105,24 +111,47 @@ def wait_gone(serial, timeout=20):
     raise SystemExit(f"{APP_ID} kept focus for {timeout}s after force-stop")
 
 
+def describe(nodes, limit=4):
+    """What the screen actually held, so a CI-only failure is diagnosable from
+    the log line rather than from a screenshot that never got taken."""
+    seen = []
+    for n in nodes:
+        if n["text"] or n["cls"] in ("Button", "EditText"):
+            seen.append(f'{n["pkg"]}/{n["cls"]}"{n["text"][:40]}"')
+        if len(seen) >= limit:
+            break
+    return seen
+
+
 def wait_stable(serial, local, timeout=120, gap=3):
-    """Cold start re-bundles from Metro, and a half-drawn tree must not be judged."""
+    """Cold start re-bundles from Metro, and a half-drawn tree must not be judged.
+
+    Only the app's own widgets count as settled. On a software-rendered (TCG)
+    device system_server ANRs often enough that an "isn't responding" dialog owns
+    the window, and that dialog carries two Buttons - accept any Button and the
+    lane grades a system dialog as the app's layout.
+    """
     deadline = time.time() + timeout * SLOWDOWN
     previous = None
+    on_screen = []
     while time.time() < deadline:
         nodes = ui_dump(serial, local)
         if nodes is None:
             previous = None
             time.sleep(gap * SLOWDOWN)
             continue
-        signature = [(n["cls"], n["text"], n["bounds"]) for n in nodes]
-        widgets = [n for n in nodes if n["cls"] in ("Button", "EditText")]
+        signature = [(n["pkg"], n["cls"], n["text"], n["bounds"]) for n in nodes]
+        widgets = [n for n in nodes if n["pkg"] == APP_ID and n["cls"] in ("Button", "EditText")]
         if widgets and signature == previous:
             return nodes
+        if not widgets and signature != previous:
+            on_screen = describe(nodes)
         previous = signature
         time.sleep(gap * SLOWDOWN)
     raise SystemExit(
-        f"the tree never settled with real widgets within {int(timeout * SLOWDOWN)}s - "
+        f"the tree never settled with {APP_ID} widgets within {int(timeout * SLOWDOWN)}s "
+        f"(mCurrentFocus={focused(serial) or '<none>'}, "
+        f"on screen instead: {'; '.join(on_screen) or '<nothing dumpable>'}) - "
         "is the app installed and is Metro running for mobile/app (debug APK)?"
     )
 
@@ -214,6 +243,11 @@ def main():
 
     serial = pick_device()
     wait_booted(serial)
+    # A TCG device is slow enough that system_server ANRs during the run; its
+    # dialog would then own the window for the rest of the lane. Nothing here
+    # depends on reading that dialog - a hung app still fails the app-widget
+    # wait below, with the focus and the on-screen tree named in the message.
+    adb("shell", "settings", "put", "global", "hide_error_dialogs", "1", serial=serial)
     stop, sbottom, _ = inset(serial, "statusBars")
     nav = inset_or_none(serial, "navigationBars")
     sw, sh = (int(v) for v in re.findall(r"\d+", adb("shell", "wm", "size", serial=serial))[-2:])
@@ -244,6 +278,7 @@ def main():
         f"expected 2 tab buttons near the top, found {len(tabs)}",
     )
     if len(tabs) != 2:
+        screencap(serial, out / "unexpected.png")
         return report(checks)
 
     (l0, t0, r0, b0), (l1, t1, r1, b1) = tabs[0]["bounds"], tabs[1]["bounds"]

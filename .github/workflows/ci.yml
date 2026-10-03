@@ -324,10 +324,10 @@ jobs:
 
   device-dry:
     name: "device job preflight (no emulator)"
-    # The device job cannot be scheduled on this account (see the comment above
-    # it), but everything in it except the KVM boot can. Running those parts on
-    # a standard runner is what makes "the job is ready to use" a measured claim
-    # instead of an assertion about untested YAML.
+    # Everything the device job does before it touches a screen - artifact
+    # plumbing, the bundle inside the APK, and the gate's own refusal logic -
+    # runs here in a couple of minutes, so a device-job failure can be read as
+    # a device problem rather than an unknown one.
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [android]
@@ -358,6 +358,14 @@ jobs:
           print('bundle bytes:', info.file_size)
           assert info.file_size > 100_000, 'the release APK lost its bundle'
           PY
+
+      - name: the gate must refuse the wrong things, offline
+        run: |
+          set -e
+          # Recorded device output, no adb needed: proves the gate cannot grade a
+          # system ANR dialog as the app's layout, still parses both inset line
+          # shapes, and still counts only the checks that ran.
+          python3 -W error scripts/gate_selfcheck.py
 
       - name: the gate script must run here and must refuse without a device
         run: |
