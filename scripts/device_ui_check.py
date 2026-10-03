@@ -171,7 +171,7 @@ def inset(serial, kind, timeout=120):
         line.strip()[:160]
         for line in out.splitlines()
         if "InsetsSource" in line or "ITYPE_" in line
-    ][:6]
+    ][:20]
     raise SystemExit(
         f"could not read the {kind} inset from dumpsys window within "
         f"{int(timeout * SLOWDOWN)}s; what it did report:\n  "

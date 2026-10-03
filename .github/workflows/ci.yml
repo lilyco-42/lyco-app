@@ -283,6 +283,12 @@ jobs:
           LYCO_DEVICE_SLOWDOWN: '8'
         run: |
           set -e
+          # This AVD reports no navigationBars inset at all while it is in gesture
+          # mode, which left the gate with nothing to compare the composer against.
+          # Three-button nav gives the device a real band, so the bottom-edge check
+          # means something here too.
+          adb shell cmd overlay enable com.android.internal.systemui.navbar.threebutton             || echo "WARN: could not switch to 3-button navigation"
+          sleep 20
           python3 scripts/device_ui_check.py \
             "$GITHUB_WORKSPACE/apk/app-release.apk" /tmp/device-ui
 
