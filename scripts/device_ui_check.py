@@ -266,6 +266,10 @@ def main():
     adb("install", "-r", str(apk), serial=serial)
     # A debug APK carries no JS bundle, so Metro must already be serving this app.
     adb("reverse", "tcp:8081", "tcp:8081", serial=serial)
+    # In CI the device idles for tens of minutes before the gate ever runs, and a
+    # screen that has gone to sleep dumps as nothing at all.
+    adb("shell", "input", "keyevent", "KEYCODE_WAKEUP", serial=serial)
+    adb("shell", "wm", "dismiss-keyguard", serial=serial)
     adb("shell", "am", "force-stop", APP_ID, serial=serial)
     wait_gone(serial)
     adb("shell", "am", "start", "-n", ACTIVITY, serial=serial)

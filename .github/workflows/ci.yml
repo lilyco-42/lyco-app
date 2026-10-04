@@ -188,7 +188,11 @@ jobs:
     # which is the only reason this job boots the emulator itself instead of using
     # the action the original plan named.
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # The whole job took 43 min on 2026-10-03 and that was with the gate failing
+    # within seconds of launch. A green run spends its time inside the gate's
+    # wait windows, which are scaled by LYCO_DEVICE_SLOWDOWN=8, so it needs more
+    # room than the 60 min the first version allowed.
+    timeout-minutes: 90
     needs: [android]
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_emulator == 'true'
     steps:
