@@ -57,10 +57,10 @@ CI 的 `device` job 原本要 GitHub *larger runner*（Linux + `/dev/kvm`），�
 
 ```powershell
 # 前提：APK 由 CI 出（gh run download -n lycoapp-debug -D <tmp>），本机绝不跑 gradle
-# device job 里不依赖 KVM 的那几步可以先在标准 runner 上真跑一遍（下载产物、验 bundle、
-# 门禁脚本能起来且无设备时干净退出）：
+# device job 里不依赖设备的那几步可以先在标准 runner 上真跑一遍（下载产物、验 bundle、
+# 门禁脚本能起来且无设备时干净退出、门禁离线自检 gate_selfcheck.py）：
 #   gh workflow run ci.yml --ref main -f dry_run_device=true
-# 剩下的模拟器启动本身，这台账号调度不了。
+# 模拟器启动本身也已经在这台账号能调度的 ubuntu-latest 上跑通过两次（TCG，慢）。
 $env:LOCALAPPDATA\Android\Sdk\emulator\emulator.exe -avd lyco-preview -no-window `
   -no-audio -no-boot-anim -no-snapshot-save -gpu swiftshader_indirect   # 起机约 80s
 cd mobile/app; npx react-native start                       # debug APK 不带 bundle，必须有 Metro
@@ -74,6 +74,11 @@ AVD `lyco-preview`（android-36 / x86_64，占 ~6 GB）的建立命令在
 导航条带以上、点 tab 真能换屏、键盘弹起时 composer 不被 IME 埋掉"。三条单独反向验过：
 退回 `App.tsx` 红 4 条，退回 `ChatScreen.tsx` 只红键盘那条，把 dump 里第二个 tab 的
 bounds 改写成"竖着堆"则并排那条判 False（证明不是永真式）。
+还有一条是 CI 教出来的：**门禁只认 `package="com.lycoapp"` 的 widget**。TCG 设备上
+`system_server` 会 ANR，"isn't responding" 弹窗自带两个 Button，老判据把弹窗当成了被测界面，
+报出 `found 0 tab buttons`（其实 app 好好起来了）。那份弹窗 dump 提交在
+`scripts/fixtures/anr-dialog-ui.xml`，由 `scripts/gate_selfcheck.py`（全部离线，无需设备/adb，
+挂在 `device-dry`）反向验门禁必须拒绝它 —— 改门禁前先跑这个，别把判据改松。
 CI 的 `android` job 在 dispatch 时还会多出 `lycoapp-release`：只有 release 变体把
 `assets/index.android.bundle` 打进 APK（debug 变体连 `assets/` 都没有），构建后有一步
 python 断言 bundle 真在里面。**已实测**这个包能脱离 dev server 跑：Metro 杀掉、

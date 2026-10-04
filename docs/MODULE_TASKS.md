@@ -238,12 +238,32 @@ GitLab 托管 runner 的官方文档只列了 class 与 vCPU/内存，**对 KVM 
 是实测出来的：**没有 KVM 的 GitHub 托管 runner 起不了 Android 模拟器**；其余都是取舍，
 由你定。顺带记一句免得下次再拿 self-hosted runner 来提：那条其实和铁律冲突 ——
 runner 就挂在你这台机器上，等于 gradle 在本机执行，正是"本机不编译 Android 产物"要挡的事。
+
 因此 CI 侧像素这条**当时保持未落地**，本机 lane（`scripts/device_ui_check.py` +
 `docs/screens/android/`）是那段时间唯一的像素来源。
 **但这条否决后来没有挡住路**：第四条不需要花钱、不开账号、也不在你机器上编译的路其实存在 ——
 就是上面测到的"免费 Linux runner + `-accel off`"，慢（起机 12 分钟）但能跑，
 所以 `device` job 已经按它重写了。教训记一条：把三条路列成菜单请人拍板之前，
 先把"唯一还没测的那一步"测掉，否则菜单本身可能是错的。
+
+**2026-10-03 再把那句"唯一确定的边界"撤掉**：它和本节开头那次 720 秒冷启动自相矛盾，是我自己
+写的两处互相打脸。"没有 KVM 起不了模拟器"混了两件事 —— 起不了的是**带硬件加速**的模拟器，
+`-accel off` 的软件模拟（TCG）在同一个免费 `ubuntu-latest` 上能起（run `36992265905`）。
+所以那张表里的四条路都不必走，`device` job 现在跑的就是这第五步。
+错的不是信息不足，而是**把一条只在这台 Windows 主机上成立的实测写成了平台级结论**，
+而推翻它只需要一次 dispatch。
+
+按这个 recipe 跑的头三次 dispatch：sha `54472ac` run `37147484032` 红在 AVD 缺 `hw.device.hash2`
+（设备不加载 pixel_7 profile，连 `navigationBars` 带都不存在）；sha `f7560fe` run `37150174931`
+红在上面那节写的"系统 ANR 弹窗冒充被测界面"；sha `20ed0ea` run `37205791423` 才是真答案 ——
+**`com.android.systemui` 自己 ANR 了**：`mCurrentFocus=Application Not Responding: com.android.systemui`、
+`on screen instead: android/TextView"System UI isn't responding"`，而且状态栏带塌成 `[0,0]`、
+仍然没有 `navigationBars`。`hide_error_dialogs=1` **没能拦住弹窗**（那条现在写在门禁的注释里，
+别再指望它）。所以两头都动了刀：门禁遇到 ANR 弹窗不再只是拒绝打分，而是**点 "Wait"**（点
+"Close app" 会把被测对象杀掉，把慢设备伪装成失败）；job 侧把显示器降到 540x1200@240dpi
+（还是 360x800 dp，但像素只有四分之一 —— TCG 每个像素都在 CPU 上画，1080x2400 那两次
+guest 的 SystemUI 反复 ANR），关掉 window/transition/animator 三档动画，并在跑门禁之前
+把 SystemUI 进程杀掉重启一次。第四次 dispatch 的结果记在下面。
 
 标准 `ubuntu-latest` 上**要硬件加速就不行**（实测 `You're running a Linux VM where hardware
 acceleration is not available`，`emulator -accel-check` 退出码 11）—— 但"不行"仅限带加速那条路，
@@ -405,6 +425,31 @@ python scripts/device_ui_check.py <tmp>\app-debug.apk <out>
 tab 顶边 ≥ 状态栏下沿、
 点第二个 tab 真能换屏、地图屏内容、点回第一个 tab、输入框底边 ≤ 导航条上沿、
 键盘弹起时 composer 底边 ≤ IME 上沿）。
+
+门禁自己有个洞，是 CI 侧暴露出来的（2026-10-03）：`wait_stable` 原来的稳定条件是"连续两帧一致
+且画面里有 Button/EditText"，而 TCG 设备上 `system_server` 会 ANR，那个
+"Process system isn't responding" 弹窗**自带两个 Button**，于是门禁把系统弹窗当成被测界面打分，
+报 `expected 2 tab buttons near the top, found 0` → `0/1`。App 其实正常起来了
+（同一次 dumpsys 里 `mFocusedApp=ActivityRecord{… com.lycoapp/.MainActivity}`），错的是判据不是包。
+现在：稳定条件要求树里必须有 `package="com.lycoapp"` 的 widget；失败信息直接把 `mCurrentFocus`
+和屏幕上真实节点打出来；遇到 ANR 弹窗时**点 "Wait"**（不是 "Close app"）让窗口回到 app；
+启动前 `KEYCODE_WAKEUP` + `wm dismiss-keyguard`（CI 里设备从开机到门禁起跑要空转几十分钟，
+屏一灭 dump 就是空的）。跑之前还写 `settings put global hide_error_dialogs 1`，
+但要照写：**这条在 CI 那台设备上没能拦住弹窗**（run `37205791423` 里弹窗照样出现），
+所以它只是顺手一设，真正的兜底是"拒绝打分 + 点 Wait + 重启 SystemUI"。
+那份弹窗 dump 原样提交成 `scripts/fixtures/anr-dialog-ui.xml`（4,156 字节，sha256
+`7a3093d1…84e3c1e8`，出处是 run `37150174931` 的 `emulator-screenshots` 产物），
+`scripts/gate_selfcheck.py` 用它做反向对照，一共 14 条离线自检：门禁必须**拒绝**这棵树、
+必须点 Wait 而绝不点 Close app、两种 dumpsys inset 行格式都还读得对、无 inset 的行不能读成 0、
+`mCurrentFocus` 两种形状都还解析得出、`n/a` 不进分母。
+它不需要设备也不需要 adb，挂在 `device-dry` 里跑（run `37205791423` 里这一步先绿了）。
+改完之后本机 lane 复跑仍是 8/8。
+
+顺带记一条免得下次误当成回归：状态栏带的高度**不是常数**。同一个 AVD 同一天，冷启动那次读到
+`y=0..136`（tab 顶边 157），快恢复那次读到 `y=0..74`（tab 顶边 95）。门禁每次都现场读
+`dumpsys window` 再比对，所以它判的是"tab 落在带以下"这个关系，不是 136 这个数 —— 表里那些
+px 只对当次那次启动有效。
+
 实测（1080×2400 @420dpi，density 2.625）：
 
 | 量到的东西 | 修 bug 前 | 修 bug 后 |

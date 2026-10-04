@@ -271,6 +271,34 @@ jobs:
           ls -l /dev/kvm || echo "NO /dev/kvm"
           emulator -accel-check || echo "accel-check exit=$?"
 
+      - name: make the display cheap enough for software rendering
+        # TCG rasterises every pixel on the CPU. At 1080x2400 the guest's own
+        # SystemUI could not keep up: it ANR'd, the status bar band collapsed to
+        # 0 high and no window ever became dumpable. 540x1200 @240dpi is the same
+        # 360x800 dp viewport with a quarter of the pixels, so the dp geometry the
+        # gate asserts is unchanged - only the px numbers scale by half.
+        # Patched unconditionally: whether the AVD came from avdmanager or from the
+        # hand-written fallback, the lcd keys must be ours.
+        run: |
+          set -e
+          python3 - <<'PY'
+          from pathlib import Path
+          cfg = Path.home() / ".android/avd/lyco.avd/config.ini"
+          want = {"hw.lcd.width": "540", "hw.lcd.height": "1200", "hw.lcd.density": "240"}
+          out, seen = [], set()
+          for line in cfg.read_text().splitlines():
+              key = line.split("=", 1)[0].strip() if "=" in line else None
+              if key in want:
+                  out.append(f"{key}={want[key]}")
+                  seen.add(key)
+              elif line:
+                  out.append(line)
+          out += [f"{k}={v}" for k, v in want.items() if k not in seen]
+          cfg.write_text("\n".join(out) + "\n")
+          print("\n".join(l for l in out if "lcd" in l))
+          PY
+          grep -q "hw.lcd.width=540" "$HOME/.android/avd/lyco.avd/config.ini"
+
       - name: boot it without acceleration
         run: |
           set -e
@@ -300,8 +328,29 @@ jobs:
           # mode, which left the gate with nothing to compare the composer against.
           # Three-button nav gives the device a real band, so the bottom-edge check
           # means something here too.
-          adb shell cmd overlay enable com.android.internal.systemui.navbar.threebutton             || echo "WARN: could not switch to 3-button navigation"
-          sleep 20
+          adb shell cmd overlay enable com.android.internal.systemui.navbar.threebutton \
+            || echo "WARN: could not switch to 3-button navigation"
+          # No window animations on a CPU-rendered device: they are extra frames
+          # for the one process that is already behind.
+          for k in window_animation_scale transition_animation_scale animator_duration_scale; do
+            adb shell settings put global "$k" 0 || echo "WARN: could not set $k"
+          done
+          adb shell settings put global hide_error_dialogs 1 || echo "WARN: hide_error_dialogs"
+          # The gate refuses an ANR dialog rather than grading it, but on this lane
+          # the dialog was still up 16 min later, so the process is restarted
+          # instead of waited out. SystemUI had already ANR'd by the time this step
+          # ran - its dialog is what the gate refused to grade.
+          PID=$(adb shell pidof -s com.android.systemui 2>/dev/null | tr -d '\r' || true)
+          if [ -n "$PID" ]; then
+            adb shell "kill $PID" || echo "WARN: could not restart SystemUI"
+          fi
+          BACK=""
+          for i in $(seq 1 12); do
+            sleep 10
+            BACK=$(adb shell pidof com.android.systemui 2>/dev/null | tr -d '\r' || true)
+            if [ -n "$BACK" ]; then break; fi
+          done
+          echo "SystemUI pid after restart: ${BACK:-<still absent>}"
           python3 scripts/device_ui_check.py \
             "$GITHUB_WORKSPACE/apk/app-release.apk" /tmp/device-ui
 

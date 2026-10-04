@@ -82,6 +82,7 @@ def ui_dump(serial, local):
             # package is what tells the app's own tree from a system window that
             # happens to be on top of it - see wait_stable().
             "pkg": n.get("package") or "",
+            "id": n.get("resource-id") or "",
             "cls": n.get("class").rsplit(".", 1)[-1],
             "text": (n.get("text") or "").strip(),
             "bounds": tuple(int(v) for v in re.findall(r"-?\d+", n.get("bounds") or "")),
@@ -123,13 +124,26 @@ def describe(nodes, limit=4):
     return seen
 
 
+def dismiss_anr(serial, nodes):
+    """Tap 'Wait' if an ANR dialog is up, so the stalled process is left running
+    and the window underneath becomes reachable again. 'Close app' would kill the
+    thing under test, and hide_error_dialogs=1 did not stop the dialog appearing
+    on the CI device, so the lane has to step around it."""
+    for n in nodes:
+        if n["id"] == "android:id/aerr_wait":
+            l, t, r, b = n["bounds"]
+            adb("shell", "input", "tap", str((l + r) // 2), str((t + b) // 2), serial=serial)
+            return True
+    return False
+
+
 def wait_stable(serial, local, timeout=120, gap=3):
     """Cold start re-bundles from Metro, and a half-drawn tree must not be judged.
 
     Only the app's own widgets count as settled. On a software-rendered (TCG)
-    device system_server ANRs often enough that an "isn't responding" dialog owns
-    the window, and that dialog carries two Buttons - accept any Button and the
-    lane grades a system dialog as the app's layout.
+    device SystemUI and system_server ANR often enough that an "isn't responding"
+    dialog owns the window, and that dialog carries two Buttons - accept any
+    Button and the lane grades a system dialog as the app's layout.
     """
     deadline = time.time() + timeout * SLOWDOWN
     previous = None
@@ -144,9 +158,13 @@ def wait_stable(serial, local, timeout=120, gap=3):
         widgets = [n for n in nodes if n["pkg"] == APP_ID and n["cls"] in ("Button", "EditText")]
         if widgets and signature == previous:
             return nodes
-        if not widgets and signature != previous:
+        if not widgets:
             on_screen = describe(nodes)
         previous = signature
+        if not widgets and dismiss_anr(serial, nodes):
+            # after tapping Wait the dialog tree is gone; do not let it count as
+            # one half of a "stable" pair
+            previous = None
         time.sleep(gap * SLOWDOWN)
     raise SystemExit(
         f"the tree never settled with {APP_ID} widgets within {int(timeout * SLOWDOWN)}s "

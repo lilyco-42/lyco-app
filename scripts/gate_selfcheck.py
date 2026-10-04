@@ -55,6 +55,28 @@ def refuses_a_system_dialog():
         check(False, "wait_stable accepted a system dialog as the app's tree")
 
 
+def taps_wait_not_close():
+    """On a TCG device the dialog keeps coming back, so the lane steps around it
+    instead of dying: tap 'Wait' (keep the process), never 'Close app' (which
+    would kill what is under test and turn a slow device into a fake failure)."""
+    taps = []
+
+    def record(*a, **k):
+        taps.append([str(x) for x in a])
+        return ANR_FOCUS
+
+    stub_adb(ANR_FOCUS)
+    gate.adb = record
+    try:
+        gate.wait_stable("stubbed", ANR, timeout=2, gap=0)
+    except SystemExit:
+        pass
+    wait_xy = ["540", "1358"]      # centre of aerr_wait bounds=[70,1295][1010,1421]
+    close_xy = ["540", "1232"]     # centre of aerr_close bounds=[70,1169][1010,1295]
+    check(any(t[-2:] == wait_xy for t in taps), f"the gate tapped Wait: {taps}")
+    check(not any(t[-2:] == close_xy for t in taps), "and never tapped Close app")
+
+
 def reads_insets_from_recorded_shapes():
     """The frame line format is not stable across releases, so each shape the
     parser claims to accept is pinned here - a band it stops finding would
@@ -103,6 +125,7 @@ def names_the_focused_window():
 
 def main():
     refuses_a_system_dialog()
+    taps_wait_not_close()
     names_the_focused_window()
     reads_insets_from_recorded_shapes()
     counts_only_checks_that_ran()
